@@ -1,0 +1,79 @@
+.ap-lobby {
+  --lobby-accent: #6257ce;
+  --lobby-line: #e4e2ef;
+  display: grid;
+  grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+  align-items: start;
+  gap: 16px 24px;
+  width: min(100%, 1140px);
+  margin-inline: auto;
+  padding: clamp(16px, 4vw, 48px);
+  color: #242638;
+  background: #f8f7fc;
+  font-family: system-ui, sans-serif;
+}
+
+.ap-lobby, .ap-lobby * { box-sizing: border-box; }
+.ap-lobby > h1, .ap-lobby > p { grid-column: 1 / -1; margin: 0; }
+.ap-lobby > h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.1; }
+.ap-lobby > p, .ap-lobby article p { color: #59586c; }
+
+.ap-lobby > section {
+  min-width: 0;
+  padding: clamp(16px, 3vw, 24px);
+  background: #fff;
+  border: 1px solid var(--lobby-line);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgb(43 32 93 / 6%);
+}
+
+.ap-lobby h2 { margin: 0 0 16px; font-size: 1.25rem; }
+.ap-lobby form, .ap-lobby label { display: grid; gap: 8px; }
+.ap-lobby form { gap: 14px; }
+.ap-lobby section > label { margin-bottom: 12px; }
+.ap-lobby label { font-size: .875rem; font-weight: 600; }
+
+.ap-lobby input, .ap-lobby select, .ap-lobby button {
+  min-height: 44px;
+  border: 1px solid var(--lobby-line);
+  border-radius: 9px;
+  padding: 8px 12px;
+  font: inherit;
+}
+
+.ap-lobby input, .ap-lobby select {
+  width: 100%;
+  min-width: 0;
+  background: #fff;
+  color: inherit;
+}
+
+.ap-lobby button {
+  background: var(--lobby-accent);
+  color: #fff;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.ap-lobby button:hover:not(:disabled) { background: #4e42b4; }
+.ap-lobby button:disabled { opacity: .55; cursor: not-allowed; }
+.ap-lobby :focus-visible { outline: 2px solid var(--lobby-accent); outline-offset: 3px; }
+.ap-lobby [role="status"] { color: #9a2943; }
+.ap-lobby [role="status"]:empty { margin: 0; }
+
+.ap-lobby article {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid var(--lobby-line);
+  border-radius: 12px;
+  background: #faf9ff;
+  overflow-wrap: anywhere;
+}
+
+.ap-lobby article h3 { margin: 0; font-size: 1.05rem; }
+.ap-lobby article p { margin: 8px 0; }
+.ap-lobby article button { margin-top: 6px; }
+
+@media (max-width: 720px) {
+  .ap-lobby { grid-template-columns: minmax(0, 1fr); }
+}
