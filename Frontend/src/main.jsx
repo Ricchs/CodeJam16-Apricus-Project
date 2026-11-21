@@ -2,10 +2,10 @@ import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import LoginPage from "./pages/login/login.jsx";
 import SignupPage from "./pages/signup/signup.jsx";
-import "./style.css";
 import LandingPage from "./pages/firstpage/firstpage.jsx";
 import CalendarPage from "./pages/calendar/calendar.jsx";
 import LobbyPage from "./pages/lobby/lobby.jsx";
+import "./style.css";
 
 function App() {
   const [page, setPage] = useState("home");
@@ -23,21 +23,29 @@ function App() {
   }
 
   if (page === "signup") {
-    return <SignupPage onShowLogin={() => setPage("login")}
-    onShowLanding={() => setPage("home")}
-    />;
+    return (
+      <SignupPage
+        onShowLogin={() => setPage("login")}
+        onShowLanding={() => setPage("home")}
+      />
+    );
   }
 
   if (page === "calendar") {
     return <CalendarPage />;
   }
+
   if (page === "lobby") {
     return <LobbyPage />;
   }
 
-  return <LoginPage onShowSignup={() => setPage("signup")} 
-  onShowLanding={() => setPage("home")}/>;
+  return (
+    <LoginPage
+      onShowSignup={() => setPage("signup")}
+      onShowLanding={() => setPage("home")}
+      onLogin={() => setPage("lobby")}
+    />
+  );
 }
 
-const root = createRoot(document.getElementById("root"));
-root.render(<App />);
+createRoot(document.getElementById("root")).render(<App />);

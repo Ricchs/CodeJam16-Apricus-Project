@@ -1,13 +1,49 @@
 import React, { useState } from "react";
-
-
-
-export default function LoginPage({ onShowSignup, onShowLanding }) {
+import { supabase } from "../../../supabase.js";
+export default function LoginPage({ onShowSignup, onShowLanding, onLogin }) {
   const [message, setMessage] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  function handleLogin(event) {
+  async function handleLogin(event) {
     event.preventDefault();
-    setMessage("Login form submitted. Supabase is not connected yet.");
+
+    if (isLoggingIn) return;
+
+    if (!supabase) {
+      setMessage("Supabase is missing its project URL or publishable key.");
+      return;
+    }
+
+    const form = new FormData(event.currentTarget);
+    const email = form.get("email").trim();
+    const password = form.get("password");
+
+    setMessage("");
+    setIsLoggingIn(true);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+
+      if (!data.session) {
+        setMessage("No login session was created.");
+        return;
+      }
+
+      setMessage("Logged in successfully.");
+      onLogin?.(data.session);
+    } catch {
+      setMessage("Unable to log in. Check your connection and try again.");
+    } finally {
+      setIsLoggingIn(false);
+    }
   }
 
   return (
@@ -31,7 +67,9 @@ export default function LoginPage({ onShowSignup, onShowLanding }) {
             />
           </label>
 
-          <button className="primary" type="submit">Log in</button>
+          <button className="primary" type="submit" disabled={isLoggingIn}>
+            {isLoggingIn ? "Logging in…" : "Log in"}
+          </button>
         </form>
 
         <p role="status">{message}</p>
