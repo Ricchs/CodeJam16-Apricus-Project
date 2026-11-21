@@ -1,11 +1,19 @@
-import React from 'react';
-import {createRoot} from 'react-dom/client';
-import LoginPage from './pages/login.jsx';
+import React, { useState } from "react";
+import { createRoot } from "react-dom/client";
+import LoginPage from "./pages/login/login.jsx";
+import SignupPage from "./pages/signup/signup.jsx";
+import "./style.css";
 
-export default function App() {
-    return <LoginPage />;
+
+function App() {
+  const [page, setPage] = useState("login");
+
+  if (page === "signup") {
+    return <SignupPage onShowLogin={() => setPage("login")} />;
+  }
+
+  return <LoginPage onShowSignup={() => setPage("signup")} />;
 }
-const container = document.getElementById('root');
-const root = createRoot(container);
-root.render(<App />);
 
+const root = createRoot(document.getElementById("root"));
+root.render(<App />);
