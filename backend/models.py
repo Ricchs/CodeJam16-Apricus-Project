@@ -10,15 +10,18 @@ from sqlalchemy import (
     func, 
 )
 
+from backend.database import Base
+
+
 class users(Base): 
     __tablename__ = "Users"
     id = Column(Integer, primary_key=True)
-    Role = Column(Text)
-    FirstName = Column(Text)
-    LastName = Column(Text)
-    Major = Column(Text)
-    Faculty = Column(Text)
-    Year = Column(Text)
+    role = Column(Text)
+    firstName = Column(Text)
+    lastName = Column(Text)
+    major = Column(Text)
+    faculty = Column(Text)
+    year = Column(Text)
 
 class interests(Base):
     __tablename__ = "Interests"
@@ -32,7 +35,7 @@ class schedules_blocks(Base):
     days_of_week = Column(Text) 
     start_time = Column(Time)
     end_time = Column(Time) 
-    Label = Column(Text)
+    label = Column(Text)
 
 class user_interests(Base):
     __tablename__ = "User_Interests"
