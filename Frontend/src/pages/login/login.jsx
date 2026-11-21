@@ -11,7 +11,7 @@ export default function LoginPage({ onShowSignup }) {
   }
 
   return (
-    <main className="auth-page">
+    <main className="login-screen">
       <section className="login-panel">
         <h1>Log in to Apricus</h1>
 
