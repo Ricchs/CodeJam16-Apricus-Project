@@ -1,8 +1,13 @@
 from dataclasses import dataclass
 from datetime import datetime, time
+from math import log
 from zoneinfo import ZoneInfo
 
 MONTREAL = ZoneInfo("America/Montreal")
+
+TIME_CURVE_C = 0.2
+TIME_CUTOFF_HOURS = 336  # 2 weeks
+FILL_CURVE_H = 0.25
 
 
 @dataclass
@@ -44,6 +49,36 @@ def is_free(blocks: list[TimeBlock], lobby: Lobby) -> bool:
         and overlaps(block.start_time, block.end_time, lobby_start_time, lobby_end_time)
         for block in blocks
     )
+
+
+def time_score(lobby: Lobby, now: datetime) -> float:
+    """
+    Returns a score in [0, 1]: 1 if the lobby starts now, dropping on a log
+    curve to 0 at TIME_CUTOFF_HOURS. Lobbies already started or beyond the
+    cutoff score 0.
+    """
+    time_until_start = (lobby.start_time - now).total_seconds() / 3600
+    if time_until_start < 0 or time_until_start >= TIME_CUTOFF_HOURS:
+        return 0.0
+
+    return 1 - (log(1 + time_until_start / TIME_CURVE_C)) / (log(1 + TIME_CUTOFF_HOURS / TIME_CURVE_C))
+
+
+
+def fill_score(members: int, capacity: int) -> float:
+    if members >= capacity:
+        return 0.0
+
+    ratio = members / capacity
+    return (1 - 2 ** (- ratio / FILL_CURVE_H)) / (1 - 2 ** (- 1 / FILL_CURVE_H))
+
+
+def interest_match(user_interests: set[int], lobby_interest: int):
+    return
+
+
+def member_similarity():
+    return
 
 
 if __name__ == "__main__":
