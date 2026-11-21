@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
-import LoginPage from "./pages/login.jsx";
-import SignupPage from "./pages/signup.jsx";
+import LoginPage from "./pages/login/login.jsx";
+import SignupPage from "./pages/signup/signup.jsx";
 import "./style.css";
+
 
 function App() {
   const [page, setPage] = useState("login");
