@@ -1,8 +1,9 @@
 import React from 'react';
 import {createRoot} from 'react-dom/client';
+import LoginPage from './pages/login.jsx';
 
-function App() {
-    return <h1> Apricus</h1>;
+export default function App() {
+    return <LoginPage />;
 }
 const container = document.getElementById('root');
 const root = createRoot(container);
