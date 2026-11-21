@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-export default function SignupPage({ onShowLogin }) {
+export default function SignupPage({ onShowLogin, onShowLanding }) {
   const [message, setMessage] = useState("");
 
   function handleSignup(event) {
@@ -83,6 +83,9 @@ export default function SignupPage({ onShowLogin }) {
 
         <button className="outline" type="button" onClick={onShowLogin}>
           Back to log in
+        </button>
+        <button className="outline" type="button" onClick={onShowLanding}>
+          Back to home
         </button>
       </section>
     </main>

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 
 
 
-export default function LoginPage({ onShowSignup }) {
+export default function LoginPage({ onShowSignup, onShowLanding }) {
   const [message, setMessage] = useState("");
 
   function handleLogin(event) {
@@ -38,6 +38,9 @@ export default function LoginPage({ onShowSignup }) {
 
         <button className="outline" type="button" onClick={onShowSignup}>
           Create an account
+        </button>
+        <button className="outline" type="button" onClick={onShowLanding}>
+          Back to home
         </button>
       </section>
     </main>

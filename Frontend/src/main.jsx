@@ -3,16 +3,36 @@ import { createRoot } from "react-dom/client";
 import LoginPage from "./pages/login/login.jsx";
 import SignupPage from "./pages/signup/signup.jsx";
 import "./style.css";
+import LandingPage from "./pages/firstpage/firstpage.jsx";
+import CalendarPage from "./pages/calendar/calendar.jsx";
 
 
 function App() {
-  const [page, setPage] = useState("login");
+  const [page, setPage] = useState("home");
 
-  if (page === "signup") {
-    return <SignupPage onShowLogin={() => setPage("login")} />;
+  if (page === "home") {
+    return (
+      <LandingPage
+        onShowLogin={() => setPage("login")}
+        onShowSignup={() => setPage("signup")}
+        onShowCalendar={() => setPage("calendar")}
+        onShowLanding={() => setPage("home")}
+      />
+    );
   }
 
-  return <LoginPage onShowSignup={() => setPage("signup")} />;
+  if (page === "signup") {
+    return <SignupPage onShowLogin={() => setPage("login")}
+    onShowLanding={() => setPage("home")}
+    />;
+  }
+
+  if (page === "calendar") {
+    return <CalendarPage />;
+  }
+
+  return <LoginPage onShowSignup={() => setPage("signup")} 
+  onShowLanding={() => setPage("home")}/>;
 }
 
 const root = createRoot(document.getElementById("root"));
