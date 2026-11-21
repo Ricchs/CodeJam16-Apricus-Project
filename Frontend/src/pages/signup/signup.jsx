@@ -42,6 +42,8 @@ export default function SignupPage({ onShowLogin }) {
           <label>
             Year of study
             <select name="year of study" defaultValue="" required>
+              <option value="" disabled hidden>Select year of study</option>
+              <option value="U0">U0</option>
               <option value="U1">U1</option>
               <option value="U2">U2</option>
               <option value="U3">U3</option>
