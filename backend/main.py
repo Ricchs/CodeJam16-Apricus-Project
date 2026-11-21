@@ -1,8 +1,10 @@
-from fastapi import FastAPI, APIRouter
+import models
+from database import Base, engine
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import engine
-
 from routers import all_routers
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
