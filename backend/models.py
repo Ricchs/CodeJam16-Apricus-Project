@@ -26,12 +26,19 @@ class User(Base):
     major = Column(Text)
     faculty = Column(Text)
     year = Column(Integer)
+    created_at = Column(
+        TIMESTAMP(timezone=True), 
+        nullable=False, 
+        server_default=func.now()
+    )
     @property
     def display_name(self):
         if self.role == 'club':
-            return self.club_name
+            return self.club_name or 'New club'
         
-        return f"{self.first_name} {self.last_name}"
+        name = " ".join(part for part in [self.first_name, self.last_name] if part)
+        
+        return name or 'New user'
 
 
 class Interest(Base):
