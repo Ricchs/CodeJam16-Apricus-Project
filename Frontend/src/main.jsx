@@ -5,7 +5,7 @@ import SignupPage from "./pages/signup/signup.jsx";
 import "./style.css";
 import LandingPage from "./pages/firstpage/firstpage.jsx";
 import CalendarPage from "./pages/calendar/calendar.jsx";
-
+import LobbyPage from "./pages/lobby/lobby.jsx";
 
 function App() {
   const [page, setPage] = useState("home");
@@ -17,6 +17,7 @@ function App() {
         onShowSignup={() => setPage("signup")}
         onShowCalendar={() => setPage("calendar")}
         onShowLanding={() => setPage("home")}
+        onShowLobby={() => setPage("lobby")}
       />
     );
   }
@@ -29,6 +30,9 @@ function App() {
 
   if (page === "calendar") {
     return <CalendarPage />;
+  }
+  if (page === "lobby") {
+    return <LobbyPage />;
   }
 
   return <LoginPage onShowSignup={() => setPage("signup")} 
