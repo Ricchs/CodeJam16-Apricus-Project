@@ -41,7 +41,12 @@ export default function SignupPage({ onShowLogin }) {
 
           <label>
             Year of study
-            <input name="year" type="number" min="1" step="1" placeholder="e.g. 1" required />
+            <select name="year of study" defaultValue="" required>
+              <option value="U1">U1</option>
+              <option value="U2">U2</option>
+              <option value="U3">U3</option>
+              <option value="U4+">U4+</option>
+            </select>
           </label>
 
           <label>
