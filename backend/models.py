@@ -25,7 +25,14 @@ class User(Base):
     club_name = Column(Text, nullable=True)
     major = Column(Text)
     faculty = Column(Text)
-    year = Column(Text)
+    year = Column(Integer)
+    @property
+    def display_name(self):
+        if self.role == 'club':
+            return self.club_name
+        
+        return f"{self.first_name} {self.last_name}"
+
 
 class Interest(Base):
     __tablename__ = "interests"
@@ -33,14 +40,14 @@ class Interest(Base):
     interest = Column(Text, unique=True, nullable=False)
 
 class ScheduleBlock(Base):
-    __tablename__ = "schedules_blocks"
+    __tablename__ = "schedule_blocks"
     id = Column(Integer, primary_key=True)
     user_id = Column(
         UUID(as_uuid=True), 
-        ForeignKey("users.id")
+        ForeignKey("users.id"), 
         nullable=False
     )
-    days_of_week = Column(Integer, nullable=False) 
+    day_of_week = Column(Integer, nullable=False) 
     start_time = Column(Time, nullable=False)
     end_time = Column(Time, nullable=False) 
     label = Column(Text)
@@ -75,7 +82,11 @@ class Lobby(Base):
     starts_at = Column(DateTime(timezone=True), nullable=False)
     ends_at = Column(DateTime(timezone=True), nullable=False)
     capacity = Column(Integer, nullable=False)
-    interest_id = Column(Integer, ForeignKey("interests.id"))
+    interest_id = Column(
+        Integer, 
+        ForeignKey("interests.id"), 
+        nullable=False
+    )
     created_at = Column(
         TIMESTAMP(timezone=True), 
         nullable=False, 
