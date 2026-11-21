@@ -45,7 +45,9 @@ export default function SignupPage({ onShowLogin }) {
               <option value="U1">U1</option>
               <option value="U2">U2</option>
               <option value="U3">U3</option>
-              <option value="U4+">U4+</option>
+              <option value="U4">U4</option>
+              <option value="U5+">U5+</option>
+
             </select>
           </label>
 
