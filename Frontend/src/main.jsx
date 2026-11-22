@@ -3,8 +3,9 @@ import { createRoot } from "react-dom/client";
 import LoginPage from "./pages/login/login.jsx";
 import SignupPage from "./pages/signup/signup.jsx";
 import LandingPage from "./pages/firstpage/firstpage.jsx";
-import CalendarPage from "./pages/calendar/calendar.jsx";
+import CalendarPage from "./pages/calendar/Calendar.jsx";
 import LobbyPage from "./pages/lobby/lobby.jsx";
+import SettingsPage from "./pages/settings/settings.jsx";
 import "./style.css";
 
 function App() {
@@ -35,8 +36,23 @@ function App() {
     return <CalendarPage />;
   }
 
+  if (page === "settings") {
+    return <SettingsPage
+      onBack={() => setPage("lobby")}
+      onLogin={() => setPage("login")}
+      onSignedOut={() => setPage("home")}
+    />;
+  }
+
   if (page === "lobby") {
-    return <LobbyPage />;
+    return (
+      <>
+        <button type="button" onClick={() => setPage("settings")}>
+          Account settings
+        </button>
+        <LobbyPage />
+      </>
+    );
   }
 
   return (
