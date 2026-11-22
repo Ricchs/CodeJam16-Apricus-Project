@@ -1,14 +1,20 @@
 import React, { useState } from "react";
 
-export default function LobbySwipeDeck({ deck, lobbies, interests, choices, onChoose, refreshing, deckError, onRetry }) {
+export default function LobbySwipeDeck({ deck, lobbies, interests, choices, onChoose, refreshing, deckError, onRetry, selectedInterestId }) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [reviewQueue, setReviewQueue] = useState([]);
   const activityNames = new Map(interests.map(({ id, interest }) => [id, interest]));
+  const selectedActivityName = activityNames.get(selectedInterestId);
   const myLobbies = lobbies.filter(({ id }) => choices[id] === true);
   const now = Date.now();
-  const dismissedLobbies = lobbies.filter(({ id, starts_at }) => choices[id] === false && Date.parse(starts_at) > now);
-  const recommendation = deck.find(({ id, starts_at }) => Date.parse(starts_at) > now && !Object.hasOwn(choices, id));
+  const matchesActivity = ({ interest_id }) => selectedInterestId == null || interest_id === selectedInterestId;
+  const dismissedLobbies = lobbies.filter((item) =>
+    matchesActivity(item) && choices[item.id] === false && Date.parse(item.starts_at) > now
+  );
+  const recommendation = deck.find((item) =>
+    matchesActivity(item) && Date.parse(item.starts_at) > now && !Object.hasOwn(choices, item.id)
+  );
   const reviewLobby = reviewQueue.length > 0
     ? dismissedLobbies.find(({ id }) => reviewQueue.includes(id))
     : undefined;
@@ -60,7 +66,9 @@ export default function LobbySwipeDeck({ deck, lobbies, interests, choices, onCh
           ) : (
             <div>
               <h2 id="current-lobby">No new recommendations</h2>
-              <p role="status">No more eligible lobbies match your current activity.</p>
+              <p role="status">{selectedActivityName
+                ? `No more eligible ${selectedActivityName} lobbies.`
+                : "No more eligible lobbies in your deck."}</p>
               {dismissedLobbies.length > 0 && (
                 <div className="ap-dashboard__actions">
                   <button type="button" disabled={saving} onClick={() => {

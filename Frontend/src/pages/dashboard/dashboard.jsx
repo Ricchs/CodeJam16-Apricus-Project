@@ -14,17 +14,17 @@ const tabs = [
   { id: "settings", label: "Account settings", Icon: Settings },
 ];
 
-function Discover({ onShowLobbies, choices, onChoose }) {
+function Discover({ onShowLobbies, choices, onChoose, selectedInterestId }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [refreshingDeck, setRefreshingDeck] = useState(false);
   const [deckError, setDeckError] = useState("");
-  const selectedActivity = useRef(null);
+  const selectedActivity = useRef(selectedInterestId);
 
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
-    Promise.all([getLobbyDeck(signal), getLobbies(signal), getInterests(signal)])
+    Promise.all([getLobbyDeck(signal, selectedActivity.current), getLobbies(signal), getInterests(signal)])
       .then(([deck, lobbies, interests]) => {
         if (!signal.aborted) setData({ deck, lobbies, interests });
       })
@@ -40,9 +40,6 @@ function Discover({ onShowLobbies, choices, onChoose }) {
     try {
       const interestId = selectedActivity.current;
       const deck = await getLobbyDeck(undefined, interestId);
-      if (interestId != null && deck.some((lobby) => lobby.interest_id !== interestId)) {
-        throw new Error("The API returned a lobby outside the selected activity.");
-      }
       setData((current) => ({ ...current, deck }));
     } catch (error) {
       setDeckError(error.message);
@@ -65,7 +62,7 @@ function Discover({ onShowLobbies, choices, onChoose }) {
       {!data && !error && <p role="status">Loading activities…</p>}
       {data && <LobbySwipeDeck {...data}
         choices={choices} onChoose={chooseAndRefresh} refreshing={refreshingDeck}
-        deckError={deckError} onRetry={refreshDeck} />}
+        deckError={deckError} onRetry={refreshDeck} selectedInterestId={selectedInterestId} />}
       <div className="ap-dashboard__actions">
         <button type="button" onClick={onShowLobbies}>Browse lobbies</button>
       </div>
@@ -151,7 +148,7 @@ export default function Dashboard({ onLogin, onSignedOut }) {
         {tab === "lobbies" && <LobbyPage />}
         {tab === "discover" && !loadingChoices && !choiceError
           && <Discover onShowLobbies={() => setTab("lobbies")}
-            choices={choices} onChoose={onChoose} />}
+            choices={choices} onChoose={onChoose} selectedInterestId={latestInterest?.interest_id} />}
         {tab === "settings" && (
           <SettingsPage onBack={showCalendar} onLogin={onLogin} onSignedOut={onSignedOut} />
         )}
