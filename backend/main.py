@@ -1,3 +1,5 @@
+import os
+
 import models
 from database import Base, engine
 from fastapi import APIRouter, FastAPI
@@ -9,6 +11,11 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
 origins = ["http://localhost:5173"]
+origins.extend(
+    origin.strip().rstrip("/")
+    for origin in os.getenv("FRONTEND_ORIGINS", "").split(",")
+    if origin.strip()
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
