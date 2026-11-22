@@ -16,6 +16,9 @@ export async function scheduleRequest(path, { method = "GET", body, signal } = {
   const headers = { Authorization: `Bearer ${data.session.access_token}` };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const response = await fetch(url, { method, headers, signal, redirect: "error", body: JSON.stringify(body) });
+  if ((response.status === 404 || response.status === 405) && path === "/events" && method === "GET") {
+    throw new Error("Dated events are unavailable. The backend needs the calendar API update.");
+  }
   if (!response.ok) {
     const { detail } = await response.json().catch(() => ({}));
     throw new Error(typeof detail === "string" ? detail : `Calendar request failed (HTTP ${response.status}).`);
