@@ -5,6 +5,7 @@ from database import get_db
 from deps import get_current_user_id
 from fastapi import APIRouter, Depends, HTTPException
 from schemas.swipe import SwipeCreate, SwipeOut
+from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -40,7 +41,8 @@ def create_swipes(
     db.execute(
         statement.on_conflict_do_update(
             index_elements=[models.Swipe.user_id, models.Swipe.lobby_id],
-            set_={"liked": statement.excluded.liked},
+            set_={"liked": statement.excluded.liked, "created_at": func.now()},
+            where=models.Swipe.liked.is_distinct_from(statement.excluded.liked),
         )
     )
     joined = db.get(models.LobbyMember, (body.lobby_id, user_id)) is not None

@@ -31,13 +31,24 @@ function Discover({ onShowLobbies, choices, onChoose }) {
     return () => controller.abort();
   }, []);
 
+  async function chooseAndRefresh(lobby, liked) {
+    await onChoose(lobby, liked);
+    setError("");
+    try {
+      const deck = await getLobbyDeck();
+      setData((current) => ({ ...current, deck }));
+    } catch (error) {
+      setError(`Choice saved. Could not refresh recommendations. ${error.message}`);
+    }
+  }
+
   return (
     <section className="ap-dashboard__discover">
       <h1>Discover</h1>
       {error && <p role="alert">{error}</p>}
       {!data && !error && <p role="status">Loading activities…</p>}
       {data && <LobbySwipeDeck {...data}
-        choices={choices} onChoose={onChoose} />}
+        choices={choices} onChoose={chooseAndRefresh} />}
       <div className="ap-dashboard__actions">
         <button type="button" onClick={onShowLobbies}>Browse lobbies</button>
       </div>
