@@ -1,6 +1,6 @@
 import { supabase } from "../../../supabase.js";
 
-async function request(path, { body, signal, authenticated = false } = {}) {
+async function request(path, { body, signal, authenticated = false, allowSignedOut = false } = {}) {
   const base = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, "");
   if (!base) throw new Error("Set VITE_API_URL to the Apricus backend URL.");
   const url = new URL((base.endsWith("/api") ? base : base + "/api") + path);
@@ -10,9 +10,12 @@ async function request(path, { body, signal, authenticated = false } = {}) {
   }
   const headers = { Accept: "application/json" };
   if (authenticated) {
+    if (!supabase && allowSignedOut) return [];
     if (!supabase) throw new Error("Supabase is not configured.");
     const { data, error } = await supabase.auth.getSession();
-    if (error || !data.session) throw new Error("Log in to continue.");
+    if (error) throw error;
+    if (!data.session && allowSignedOut) return [];
+    if (!data.session) throw new Error("Log in to join a lobby.");
     headers.Authorization = `Bearer ${data.session.access_token}`;
   }
   if (body) headers["Content-Type"] = "application/json";
@@ -36,3 +39,9 @@ async function request(path, { body, signal, authenticated = false } = {}) {
 export const getLobbies = (signal) => request("/lobbies", { signal });
 export const getInterests = (signal) => request("/interests/", { signal });
 export const createLobby = (body) => request("/lobbies", { body, authenticated: true });
+
+export const getJoinedLobbies = (signal) =>
+  request("/lobbies/joined", { signal, authenticated: true, allowSignedOut: true });
+
+export const joinLobby = (id) =>
+  request(`/lobbies/${encodeURIComponent(id)}/join`, { body: {}, authenticated: true });

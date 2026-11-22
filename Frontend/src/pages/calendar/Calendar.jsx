@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./Calendar.css";
+import { getJoinedLobbies, getLobbies } from "../lobby/lobbyApi.js";
 import {
   addDays,
   CALENDAR_CATEGORIES,
@@ -227,6 +228,9 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
   const [view, setView] = useState("week");
   const [enabledCategories, setEnabledCategories] = useState(() => new Set(CALENDAR_CATEGORIES.map((category) => category.id)));
   const [draft, setDraft] = useState(null);
+  const [lobbyEvents, setLobbyEvents] = useState([]);
+  const [lobbyError, setLobbyError] = useState("");
+  const [selectedLobby, setSelectedLobby] = useState(null);
   const fileInput = useRef(null);
 
   useEffect(() => {
@@ -234,9 +238,38 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
     onEventsChange?.(events);
   }, [events, storageKey, onEventsChange]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    async function loadLobbyEvents() {
+      try {
+        const ids = new Set(await getJoinedLobbies(signal));
+        if (!ids.size || signal.aborted) return;
+        const lobbies = await getLobbies(signal);
+        if (signal.aborted) return;
+        setLobbyEvents(lobbies.filter(({ id }) => ids.has(id)).map((lobby) => ({
+          id: `lobby-${lobby.id}`,
+          title: lobby.title,
+          start: lobby.starts_at,
+          end: lobby.ends_at,
+          category: "social",
+          location: lobby.location || "",
+          source: "lobby",
+        })));
+      } catch {
+        if (!signal.aborted) setLobbyError("Could not load joined lobbies.");
+      }
+    }
+
+    loadLobbyEvents();
+    return () => controller.abort();
+  }, []);
+
+  const calendarEvents = useMemo(() => [...events, ...lobbyEvents], [events, lobbyEvents]);
   const filteredEvents = useMemo(
-    () => sortEvents(events.filter((event) => enabledCategories.has(event.category))),
-    [events, enabledCategories],
+    () => sortEvents(calendarEvents.filter((event) => enabledCategories.has(event.category))),
+    [calendarEvents, enabledCategories],
   );
   const eventsByDay = useMemo(() => {
     const grouped = new Map();
@@ -260,7 +293,14 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
     setActiveDate(date);
     setDraft(emptyDraft(date));
   };
-  const openEditEvent = (event) => setDraft(draftFromEvent(event));
+  function openEvent(event) {
+    if (event.source === "lobby") {
+      setSelectedLobby(event);
+    } else {
+      setSelectedLobby(null);
+      setDraft(draftFromEvent(event));
+    }
+  }
   const saveEvent = (event) => {
     setEvents((current) => sortEvents(event.id && current.some((item) => item.id === event.id)
       ? current.map((item) => item.id === event.id ? event : item)
@@ -282,7 +322,7 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
   };
 
   const downloadCalendar = () => {
-    const blob = new Blob([exportIcs(events)], { type: "text/calendar;charset=utf-8" });
+    const blob = new Blob([exportIcs(calendarEvents)], { type: "text/calendar;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -334,7 +374,7 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
                 <input type="checkbox" checked={enabledCategories.has(category.id)} onChange={() => toggleCategory(category.id)} />
                 <span className="ap-calendar__filter-dot" style={{ "--event-color": category.color }} />
                 <span>{category.label}</span>
-                <span className="ap-calendar__filter-count">{events.filter((event) => event.category === category.id).length}</span>
+                <span className="ap-calendar__filter-count">{calendarEvents.filter((event) => event.category === category.id).length}</span>
               </label>
             ))}
           </section>
@@ -362,9 +402,18 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
           </div>
 
           {view === "week"
-            ? <WeekGrid activeDate={activeDate} eventsByDay={eventsByDay} onDayClick={openNewEvent} onEventClick={openEditEvent} />
-            : <MonthGrid activeDate={activeDate} eventsByDay={eventsByDay} onDayClick={openNewEvent} onEventClick={openEditEvent} />}
-          <p className="ap-calendar__privacy">Your events are saved in this browser on this device.</p>
+            ? <WeekGrid activeDate={activeDate} eventsByDay={eventsByDay} onDayClick={openNewEvent} onEventClick={openEvent} />
+            : <MonthGrid activeDate={activeDate} eventsByDay={eventsByDay} onDayClick={openNewEvent} onEventClick={openEvent} />}
+          {lobbyError && <p role="alert">{lobbyError}</p>}
+          {selectedLobby && (
+            <section aria-label="Joined lobby details">
+              <h3>{selectedLobby.title}</h3>
+              <p>{fullDateFormatter.format(new Date(selectedLobby.start))} · {formatTime(selectedLobby.start)} to {formatTime(selectedLobby.end)}</p>
+              {selectedLobby.location && <p>{selectedLobby.location}</p>}
+              <button className="ap-calendar__button" type="button" onClick={() => setSelectedLobby(null)}>Close details</button>
+            </section>
+          )}
+          <p className="ap-calendar__privacy">Personal events are saved in this browser. Joined lobbies sync from your account.</p>
         </section>
       </div>
 
