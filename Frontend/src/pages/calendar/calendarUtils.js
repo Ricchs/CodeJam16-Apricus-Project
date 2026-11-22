@@ -93,52 +93,81 @@ function unescapeIcs(value = "") {
   return value.replace(/\\n/gi, "\n").replace(/\\,/g, ",").replace(/\\;/g, ";").replace(/\\\\/g, "\\");
 }
 
-function parseIcsDate(line) {
-  if (!line) return null;
-  const [property, raw] = line.split(":", 2);
-  if (!raw) return null;
-  if (/VALUE=DATE/.test(property)) {
-    return new Date(Number(raw.slice(0, 4)), Number(raw.slice(4, 6)) - 1, Number(raw.slice(6, 8))).toISOString();
+function parseIcsDate({ value, params }) {
+  const match = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?$/.exec(value);
+  if (!match) throw new Error("The file contains an invalid event date.");
+  const [, year, month, day, hour = "00", minute = "00", second = "00", utc] = match;
+  const parts = [+year, +month - 1, +day, +hour, +minute, +second];
+  const wallTime = Date.UTC(...parts);
+  const zone = /(?:^|;)TZID=(?:"([^"]+)"|([^;]+))/i.exec(params);
+  if (utc) return new Date(wallTime);
+  if (!zone) return new Date(...parts);
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: zone[1] || zone[2], year: "numeric", month: "numeric", day: "numeric",
+    hour: "numeric", minute: "numeric", second: "numeric", hourCycle: "h23",
+  });
+  let candidate = wallTime;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const fields = Object.fromEntries(formatter.formatToParts(candidate).map(({ type, value }) => [type, Number(value)]));
+    const displayed = Date.UTC(fields.year, fields.month - 1, fields.day, fields.hour, fields.minute, fields.second);
+    if (displayed === wallTime) return new Date(candidate);
+    candidate += wallTime - displayed;
   }
-  const match = raw.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?(Z)?$/);
-  if (!match) return null;
-  const [, y, m, d, h, min, sec = "00", utc] = match;
-  const date = utc
-    ? new Date(Date.UTC(+y, +m - 1, +d, +h, +min, +sec))
-    : new Date(+y, +m - 1, +d, +h, +min, +sec);
-  return date.toISOString();
+  throw new Error("An event time falls inside a daylight-saving clock change.");
+}
+
+function durationMilliseconds(value) {
+  const match = /^P(?:(\d+)W|(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?)$/i.exec(value);
+  if (!match) throw new Error("The file contains an invalid event duration.");
+  const [, weeks = 0, days = 0, hours = 0, minutes = 0, seconds = 0] = match.map((part) => part === undefined ? undefined : Number(part));
+  return (((weeks * 7 + days) * 24 + hours) * 3600 + minutes * 60 + seconds) * 1000;
 }
 
 export function importIcs(text) {
-  const lines = unfoldIcs(text);
   const imported = [];
   let current = null;
-  for (const line of lines) {
-    if (line === "BEGIN:VEVENT") current = {};
-    else if (line === "END:VEVENT" && current) {
-      const start = parseIcsDate(current.DTSTART);
-      const end = parseIcsDate(current.DTEND) || (start ? new Date(new Date(start).getTime() + 60 * 60 * 1000).toISOString() : null);
-      if (start && end && current.SUMMARY) {
-        const category = unescapeIcs(current.CATEGORIES || "personal").toLowerCase();
+  let insideAlarm = false;
+  for (const rawLine of unfoldIcs(text.replace(/^\uFEFF/, ""))) {
+    const line = rawLine.trimEnd();
+    const boundary = line.toUpperCase();
+    if (boundary === "BEGIN:VEVENT") {
+      current = {};
+      insideAlarm = false;
+    } else if (boundary === "END:VEVENT" && current) {
+      if (current.RRULE || current.RDATE || current["RECURRENCE-ID"]) {
+        throw new Error("Recurring ICS events need to be exported as individual occurrences.");
+      }
+      if (current.DTSTART && current.STATUS?.value.toUpperCase() !== "CANCELLED") {
+        const start = parseIcsDate(current.DTSTART);
+        const end = current.DTEND ? parseIcsDate(current.DTEND)
+          : current.DURATION ? new Date(+start + durationMilliseconds(current.DURATION.value))
+          : /^\d{8}$/.test(current.DTSTART.value) ? addDays(start, 1)
+          : new Date(+start + 3600000);
+        if (end <= start) throw new Error("An event ends before or at its start time.");
+        const category = unescapeIcs(current.CATEGORIES?.value || "").toLowerCase();
+        const title = unescapeIcs(current.SUMMARY?.value || "").trim() || "Untitled event";
+        const location = unescapeIcs(current.LOCATION?.value || "");
+        const key = current.UID?.value || JSON.stringify([title, start, end, location]);
+        // Encode UTF-8 bytes in fixed-width hex for stable, URL-safe IDs.
+        const id = `ics-${Array.from(new TextEncoder().encode(key), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
         imported.push({
-          id: createEventId(),
-          title: unescapeIcs(current.SUMMARY),
-          start,
-          end,
+          id, title, start: start.toISOString(), end: end.toISOString(),
           category: CALENDAR_CATEGORIES.some((item) => item.id === category) ? category : "personal",
-          location: unescapeIcs(current.LOCATION || ""),
-          notes: unescapeIcs(current.DESCRIPTION || ""),
+          location, notes: unescapeIcs(current.DESCRIPTION?.value || ""),
         });
       }
       current = null;
-    } else if (current) {
-      const separator = line.indexOf(":");
-      if (separator < 0) continue;
-      const key = line.slice(0, separator).split(";")[0].toUpperCase();
-      if (["SUMMARY", "DTSTART", "DTEND", "CATEGORIES", "LOCATION", "DESCRIPTION"].includes(key)) {
-        current[key] = line.slice(separator + 1);
-      }
+    } else if (current && boundary === "BEGIN:VALARM") {
+      insideAlarm = true;
+    } else if (current && boundary === "END:VALARM") {
+      insideAlarm = false;
+    } else if (current && !insideAlarm) {
+      const header = /^(?:[^":]|"[^"]*")*:/.exec(line);
+      const colon = header ? header[0].length - 1 : -1;
+      if (colon < 0) continue;
+      const [key, ...params] = line.slice(0, colon).split(";");
+      current[key.toUpperCase()] = { value: line.slice(colon + 1), params: params.join(";") };
     }
   }
-  return imported;
+  return sortEvents(imported);
 }

@@ -1,23 +1,47 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import LoginPage from "./pages/login/login.jsx";
 import SignupPage from "./pages/signup/signup.jsx";
 import LandingPage from "./pages/firstpage/firstpage.jsx";
 import CalendarPage from "./pages/calendar/Calendar.jsx";
 import LobbyPage from "./pages/lobby/lobby.jsx";
-import SettingsPage from "./pages/usr_setting/usr_settings.jsx";
+import SettingsPage from "./pages/settings/usr_settings.jsx";
+import Dashboard from "./pages/dashboard/dashboard.jsx";
+import { supabase } from "../supabase.js";
 import "./style.css";
 
 function App() {
-  const [page, setPage] = useState("home");
+  const [page, setPage] = useState(supabase ? null : "home");
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "INITIAL_SESSION") {
+        setPage(session ? "dashboard" : "home");
+      } else if (event === "SIGNED_OUT") {
+        setPage("home");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (page === null) {
+    return <p role="status">Checking your session…</p>;
+  }
+
+  const showHome = () => setPage("home");
+  const showLogin = () => setPage("login");
+  const showSignup = () => setPage("signup");
 
   if (page === "home") {
     return (
       <LandingPage
-        onShowLogin={() => setPage("login")}
-        onShowSignup={() => setPage("signup")}
+        onShowLogin={showLogin}
+        onShowSignup={showSignup}
         onShowCalendar={() => setPage("calendar")}
-        onShowLanding={() => setPage("home")}
+        onShowLanding={showHome}
         onShowLobby={() => setPage("lobby")}
       />
     );
@@ -25,11 +49,12 @@ function App() {
 
   if (page === "signup") {
     return (
-      <SignupPage
-        onShowLogin={() => setPage("login")}
-        onShowLanding={() => setPage("home")}
-      />
+      <SignupPage onShowLogin={showLogin} onShowLanding={showHome} />
     );
+  }
+
+  if (page === "dashboard") {
+    return <Dashboard onLogin={showLogin} onSignedOut={showHome} />;
   }
 
   if (page === "calendar") {
@@ -37,11 +62,13 @@ function App() {
   }
 
   if (page === "settings") {
-    return <SettingsPage
-      onBack={() => setPage("lobby")}
-      onLogin={() => setPage("login")}
-      onSignedOut={() => setPage("home")}
-    />;
+    return (
+      <SettingsPage
+        onBack={() => setPage("lobby")}
+        onLogin={showLogin}
+        onSignedOut={showHome}
+      />
+    );
   }
 
   if (page === "lobby") {
@@ -57,9 +84,9 @@ function App() {
 
   return (
     <LoginPage
-      onShowSignup={() => setPage("signup")}
-      onShowLanding={() => setPage("home")}
-      onLogin={() => setPage("lobby")}
+      onShowSignup={showSignup}
+      onShowLanding={showHome}
+      onLogin={() => setPage("dashboard")}
     />
   );
 }

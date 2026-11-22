@@ -1,137 +1,165 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { createLobby, getInterests, getJoinedLobbies, getLobbies, joinLobby } from "./lobbyApi.js";
 import "./lobby.css";
 
-const categories = ["Study", "Gym", "Sports", "Food", "Seminars", "Hobbies"];
-const key = "apricus-lobbies-v1";
-
-function demoLobbies() {
-  const startsAt = Date.now() + 24 * 60 * 60 * 1000;
-  return [{
-    id: "demo-study", title: "Library study group (demo)",
-    location: "McLennan Library", category: "Study", startsAt,
-    endsAt: startsAt + 60 * 60 * 1000, capacity: 6,
-    joined: false, host: false,
-  }];
-}
-
-function loadLobbies() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(key));
-    return Array.isArray(saved) ? saved : demoLobbies();
-  } catch {
-    return demoLobbies();
-  }
-}
-
 export default function LobbyPage() {
-  const [lobbies, setLobbies] = useState(loadLobbies);
-  const [category, setCategory] = useState("");
+  const [lobbies, setLobbies] = useState([]);
+  const [interests, setInterests] = useState([]);
   const [search, setSearch] = useState("");
-  const [message, setMessage] = useState("");
+  const [filter, setFilter] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [listError, setListError] = useState("");
+  const [interestError, setInterestError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [refresh, setRefresh] = useState(0);
+  const [joinedIds, setJoinedIds] = useState([]);
+  const [joiningId, setJoiningId] = useState(null);
+  const [joinError, setJoinError] = useState(null);
+  const [joinNotice, setJoinNotice] = useState(null);
+  const [membershipError, setMembershipError] = useState("");
 
-  function save(next) {
-    try {
-      localStorage.setItem(key, JSON.stringify(next));
-      setLobbies(next);
-      setMessage("");
-      return true;
-    } catch {
-      setMessage("The browser could not save your changes.");
-      return false;
-    }
-  }
+  useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
+    setLoading(true);
+    setListError("");
+    setInterestError("");
+    getLobbies(signal).then((rows) => {
+      if (!signal.aborted) setLobbies(rows);
+    }).catch((error) => {
+      if (!signal.aborted) setListError(error.message);
+    }).finally(() => {
+      if (!signal.aborted) setLoading(false);
+    });
+    getInterests(signal).then((rows) => {
+      if (!signal.aborted) setInterests(rows);
+    }).catch((error) => {
+      if (!signal.aborted) setInterestError(error.message);
+    });
+    setMembershipError("");
+    getJoinedLobbies(signal).then((ids) => {
+      if (!signal.aborted) setJoinedIds((current) => [...new Set([...current, ...ids])]);
+    }).catch((error) => {
+      if (!signal.aborted) setMembershipError(error.message);
+    });
+    return () => controller.abort();
+  }, [refresh]);
 
-  function createLobby(event) {
+  async function submit(event) {
     event.preventDefault();
+    if (saving || loading) return;
     const form = event.currentTarget;
-    const data = new FormData(form);
-    const title = data.get("title").trim();
-    const location = data.get("location").trim();
-    const startsAt = new Date(data.get("startsAt")).getTime();
-    const endsAt = new Date(data.get("endsAt")).getTime();
-    const capacity = Number(data.get("capacity"));
-    if (!title || !location || !categories.includes(data.get("category")) ||
+    const fields = new FormData(form);
+    const title = fields.get("title").trim();
+    const location = fields.get("location").trim();
+    const start = new Date(fields.get("starts_at"));
+    const end = new Date(fields.get("ends_at"));
+    const interestId = Number(fields.get("interest_id"));
+    const capacity = Number(fields.get("capacity"));
+
+    if (!title || !location || !interests.some(({ id }) => id === interestId) ||
         !Number.isInteger(capacity) || capacity < 2 || capacity > 100) {
-      setMessage("Enter a title, a location, a category and a capacity from 2 to 100.");
+      setFeedback("Enter a title, location, interest and capacity from 2 to 100.");
       return;
     }
-    if (!Number.isFinite(startsAt) || !Number.isFinite(endsAt) ||
-        startsAt <= Date.now() || endsAt <= startsAt) {
-      setMessage("Choose a future start time and an end time after it.");
+    if (!(start.getTime() > Date.now() && end > start)) {
+      setFeedback("Choose a future start time and an end time after it.");
       return;
     }
-    const lobby = {
-      id: crypto.randomUUID(), title, location, category: data.get("category"),
-      startsAt, endsAt, capacity, joined: true, host: true,
-    };
-    if (save([...lobbies, lobby])) {
+    setSaving(true);
+    setFeedback("");
+    try {
+      const saved = await createLobby({
+        title, location, capacity, interest_id: interestId,
+        starts_at: start.toISOString(), ends_at: end.toISOString(),
+      });
+      if (saved?.id) setLobbies((rows) => [...rows.filter(({ id }) => id !== saved.id), saved]);
       form.reset();
-      setCategory("");
       setSearch("");
+      setFilter("");
+      setFeedback("Lobby created.");
+      setRefresh((value) => value + 1);
+    } catch (error) {
+      setFeedback(error.message);
+    } finally {
+      setSaving(false);
     }
   }
 
-  function toggleMembership(lobby) {
-    if (lobby.host || (!lobby.joined && lobby.startsAt <= Date.now())) {
-      setMessage("You can only join an upcoming lobby. Hosts can cancel their own lobby.");
-      return;
+  async function handleJoin(id) {
+    if (joiningId !== null) return;
+    setJoiningId(id);
+    setJoinError(null);
+    try {
+      await joinLobby(id);
+      setJoinedIds((current) => [...new Set([...current, id])]);
+      setJoinNotice({ id, message: "Added to your calendar." });
+    } catch (error) {
+      setJoinError({ id, message: error.message });
+    } finally {
+      setJoiningId(null);
     }
-    save(lobbies.map((item) =>
-      item.id === lobby.id ? { ...item, joined: !item.joined } : item
-    ));
   }
 
+  const names = new Map(interests.map(({ id, interest: name }) => [id, name]));
   const query = search.trim().toLowerCase();
-  const visible = lobbies.filter((lobby) =>
-    (!category || lobby.category === category) &&
-    [lobby.title, lobby.location, lobby.category].some((value) =>
-      value.toLowerCase().includes(query)
+  const visible = lobbies.filter((row) =>
+    (!filter || String(row.interest_id) === filter) &&
+    [row.title, row.location, names.get(row.interest_id)].some((value) =>
+      String(value ?? "").toLowerCase().includes(query)
     )
-  ).sort((a, b) => a.startsAt - b.startsAt);
+  ).sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));
 
   return (
     <main className="ap-lobby">
       <h1>Lobbies</h1>
-      <p>This demo saves lobbies in this browser.</p>
       <section aria-labelledby="create-lobby">
         <h2 id="create-lobby">Create a lobby</h2>
-        <form onSubmit={createLobby}>
+        <form onSubmit={submit}>
           <label>Title <input name="title" required maxLength={80} /></label>
           <label>Location <input name="location" required maxLength={120} /></label>
-          <label>Category <select name="category">
-            {categories.map((item) => <option key={item}>{item}</option>)}
+          <label>Interest <select name="interest_id" defaultValue="" required>
+            <option value="" disabled>Select an interest</option>
+            {interests.map(({ id, interest: name }) => <option value={id} key={id}>{name}</option>)}
           </select></label>
-          <label>Starts <input name="startsAt" type="datetime-local" required /></label>
-          <label>Ends <input name="endsAt" type="datetime-local" required /></label>
+          <label>Starts <input name="starts_at" type="datetime-local" required /></label>
+          <label>Ends <input name="ends_at" type="datetime-local" required /></label>
           <label>Capacity <input name="capacity" type="number" min={2} max={100} defaultValue={6} required /></label>
-          <button type="submit">Create lobby</button>
+          <button type="submit" disabled={loading || saving || !interests.length || !!interestError}>
+            {saving ? "Creating…" : "Create lobby"}
+          </button>
         </form>
-        <p role="status">{message}</p>
+        <p role="status">{feedback || interestError || (!loading && !interests.length ? "No interests are available." : "")}</p>
       </section>
       <section aria-labelledby="browse-lobbies">
         <h2 id="browse-lobbies">Browse lobbies</h2>
         <label>Search <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
-        <label>Category <select value={category} onChange={(event) => setCategory(event.target.value)}>
-          <option value="">All categories</option>
-          {categories.map((item) => <option key={item}>{item}</option>)}
+        <label>Interest <select value={filter} onChange={(event) => setFilter(event.target.value)}>
+          <option value="">All interests</option>
+          {interests.map(({ id, interest: name }) => <option value={id} key={id}>{name}</option>)}
         </select></label>
-        {visible.length === 0 && <p>No lobbies found.</p>}
-        {visible.map((lobby) => (
-          <article key={lobby.id}>
-            <h3>{lobby.title}</h3>
-            <p>{lobby.category} · {lobby.location} · Capacity {lobby.capacity}</p>
-            <p>{new Date(lobby.startsAt).toLocaleString()} to {new Date(lobby.endsAt).toLocaleString()}</p>
-            {lobby.host ? (
-              <button type="button" onClick={() => {
-                if (window.confirm("Cancel this lobby?")) {
-                  save(lobbies.filter((item) => item.id !== lobby.id));
-                }
-              }}>Cancel lobby</button>
-            ) : (
-              <button type="button" disabled={!lobby.joined && lobby.startsAt <= Date.now()} onClick={() => toggleMembership(lobby)}>
-                {lobby.joined ? "Leave lobby" : "Join lobby"}
-              </button>
-            )}
+        <button type="button" disabled={loading || saving} onClick={() => setRefresh((value) => value + 1)}>Refresh lobbies</button>
+        {loading && <p role="status">Loading lobbies…</p>}
+        {membershipError && <p role="alert">Could not load your memberships. {membershipError}</p>}
+        {listError && <p role="alert">{listError}</p>}
+        {!loading && !listError && !visible.length && <p>No lobbies found.</p>}
+        {visible.map((row) => (
+          <article key={row.id}>
+            <h3>{row.title}</h3>
+            <p>{names.get(row.interest_id) ?? "Interest"} · {row.location || "Location TBD"} · Capacity {row.capacity}</p>
+            <p>{new Date(row.starts_at).toLocaleString()} to {new Date(row.ends_at).toLocaleString()}</p>
+            <button
+              type="button"
+              disabled={joiningId !== null || joinedIds.includes(row.id) || Date.parse(row.starts_at) <= Date.now()}
+              onClick={() => handleJoin(row.id)}
+            >
+              {joinedIds.includes(row.id) ? "Joined" :
+                joiningId === row.id ? "Joining…" :
+                Date.parse(row.starts_at) <= Date.now() ? "Lobby started" : "Join lobby"}
+            </button>
+            {joinNotice?.id === row.id && <p role="status">{joinNotice.message}</p>}
+            {joinError?.id === row.id && <p role="alert">{joinError.message}</p>}
           </article>
         ))}
       </section>

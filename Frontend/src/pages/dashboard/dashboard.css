@@ -1,0 +1,81 @@
+.ap-dashboard {
+  display: grid;
+  grid-template-columns: 214px minmax(0, 1fr);
+  min-height: 100vh;
+  background: #f8f7fc;
+  color: #242638;
+  font-family: system-ui, sans-serif;
+}
+.ap-dashboard__sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 24px 14px;
+  background: #fff;
+  border-right: 1px solid #e4e2ef;
+}
+.ap-dashboard__sidebar nav {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+}
+.ap-dashboard__sidebar button, .ap-dashboard__actions button {
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 12px;
+}
+.ap-dashboard__sidebar nav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+}
+.ap-dashboard__sidebar nav button:last-child { margin-top: auto; }
+.ap-dashboard__sidebar button:hover, .ap-dashboard__sidebar button[aria-current="page"] {
+  background: #eeebfc;
+  color: #4335a1;
+}
+.ap-dashboard__sidebar .ap-dashboard__brand {
+  text-align: left;
+  font-size: 1.45rem;
+  font-weight: 750;
+}
+.ap-dashboard__content { min-width: 0; }
+.ap-dashboard__discover { max-width: 680px; margin: auto; padding: clamp(16px, 5vw, 48px); }
+.ap-dashboard__card {
+  padding: clamp(16px, 4vw, 32px);
+  background: #fff;
+  border: 1px solid #e4e2ef;
+  border-radius: 16px;
+  overflow-wrap: anywhere;
+}
+.ap-dashboard__interests {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  border: 1px solid #e4e2ef;
+  border-radius: 10px;
+  padding: 12px;
+  margin: 0;
+}
+.ap-dashboard__interests label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.ap-dashboard__discover .ap-dashboard__actions { margin-top: 12px; }
+.ap-dashboard__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.ap-dashboard__recommendation-actions { justify-content: space-between; }
+.ap-dashboard__recommendation-actions button:last-child { margin-inline-start: auto; }
+.ap-dashboard__actions button { background: #5347b5; color: #fff; }
+.ap-dashboard__sidebar button:focus-visible, .ap-dashboard__actions button:focus-visible {
+  outline: 2px solid #5347b5;
+  outline-offset: 2px;
+}
+@media (max-width: 760px) {
+  .ap-dashboard { grid-template-columns: minmax(0, 1fr); }
+  .ap-dashboard__sidebar { gap: 4px; padding: 8px; border: 0; border-bottom: 1px solid #e4e2ef; }
+  .ap-dashboard__sidebar nav { flex-direction: row; flex-wrap: wrap; }
+  .ap-dashboard__sidebar nav button:last-child { margin-top: 0; }
+}
