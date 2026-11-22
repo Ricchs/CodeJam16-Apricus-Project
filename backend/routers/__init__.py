@@ -1,3 +1,3 @@
-from .health import router as health_router
+from .lobbies import router as lobbies_router
 
-all_routers = [health_router]
+all_routers = [lobbies_router]
