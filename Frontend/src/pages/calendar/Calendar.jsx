@@ -15,6 +15,7 @@ import {
   startOfWeek,
 } from "./calendarUtils";
 
+const EMPTY_LOBBY_CHOICES = {};
 const STORAGE_KEY = "apricus-calendar-events-v1";
 const weekdayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const monthFormatter = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" });
@@ -222,7 +223,7 @@ function WeekGrid({ activeDate, eventsByDay, onDayClick, onEventClick }) {
   );
 }
 
-export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY, className = "", onEventsChange }) {
+export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY, className = "", onEventsChange, lobbyChoices = EMPTY_LOBBY_CHOICES }) {
   const [events, setEvents] = useState(() => readSavedEvents(storageKey, initialEvents));
   const [activeDate, setActiveDate] = useState(() => new Date());
   const [view, setView] = useState("week");
@@ -244,8 +245,17 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
 
     async function loadLobbyEvents() {
       try {
-        const ids = new Set(await getJoinedLobbies(signal));
-        if (!ids.size || signal.aborted) return;
+        const ids = new Set(Object.keys(lobbyChoices).filter((id) => lobbyChoices[id] === true));
+        try {
+          for (const id of await getJoinedLobbies(signal)) ids.add(id);
+        } catch {
+          if (!signal.aborted) setLobbyError("Could not load joined lobbies.");
+        }
+        if (signal.aborted) return;
+        if (!ids.size) {
+          setLobbyEvents([]);
+          return;
+        }
         const lobbies = await getLobbies(signal);
         if (signal.aborted) return;
         setLobbyEvents(lobbies.filter(({ id }) => ids.has(id)).map((lobby) => ({
@@ -258,13 +268,14 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
           source: "lobby",
         })));
       } catch {
-        if (!signal.aborted) setLobbyError("Could not load joined lobbies.");
+        if (!signal.aborted) setLobbyError("Could not load lobby events.");
       }
     }
 
+    setLobbyError("");
     loadLobbyEvents();
     return () => controller.abort();
-  }, []);
+  }, [lobbyChoices]);
 
   const calendarEvents = useMemo(() => [...events, ...lobbyEvents], [events, lobbyEvents]);
   const filteredEvents = useMemo(
@@ -406,7 +417,7 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
             : <MonthGrid activeDate={activeDate} eventsByDay={eventsByDay} onDayClick={openNewEvent} onEventClick={openEvent} />}
           {lobbyError && <p role="alert">{lobbyError}</p>}
           {selectedLobby && (
-            <section aria-label="Joined lobby details">
+            <section aria-label="Lobby details">
               <h3>{selectedLobby.title}</h3>
               <p>{fullDateFormatter.format(new Date(selectedLobby.start))} · {formatTime(selectedLobby.start)} to {formatTime(selectedLobby.end)}</p>
               {selectedLobby.location && <p>{selectedLobby.location}</p>}

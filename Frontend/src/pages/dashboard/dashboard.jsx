@@ -63,7 +63,7 @@ export default function Dashboard({ onLogin, onSignedOut }) {
         </nav>
       </aside>
       <div className="ap-dashboard__content">
-        {tab === "calendar" && <CalendarPage />}
+        {tab === "calendar" && <CalendarPage lobbyChoices={choices} />}
         {tab === "lobbies" && <LobbyPage />}
         {tab === "discover" && <Discover onShowLobbies={() => setTab("lobbies")} preferences={preferences}
           setPreferences={setPreferences} choices={choices} setChoices={setChoices} />}
