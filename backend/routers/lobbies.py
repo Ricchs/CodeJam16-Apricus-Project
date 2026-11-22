@@ -1,34 +1,41 @@
 from collections import defaultdict
 from datetime import datetime
+from typing import Annotated
 from uuid import UUID
 
 import models
 from database import get_db
 from deps import get_current_user_id
-from fastapi import APIRouter, Depends, HTTPException
-from python import Query
-from schemas.lobby import LobbyCreate, LobbyDetail, LobbyOut, MemberOut
+from fastapi import APIRouter, Depends, HTTPException, Query
+from schemas.lobby import LobbyCreate, LobbyOut, LobbyDetail, MemberOut
 from services.matching import MONTREAL, TimeBlock, rank_lobbies
 from services.matching import Lobby as MatchLobby
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
+from sqlalchemy import func, or_
 
 router = APIRouter()
 
 
 @router.get("/lobbies", response_model=list[LobbyOut])
+def get_lobbies(db: Session = Depends(get_db)):
+    return db.query(models.Lobby).all()
+
+
 @router.get(
     "/lobbies/deck",
     response_model=list[LobbyOut],
     description=(
         "After an Interested choice, only eligible lobbies in that activity are returned. "
-        "When provided, interest_id takes precedence over saved choices."
+        "When provided, interest_id takes precedence over saved choices. "
+        "Set include_other_activities to put matching lobbies first and include the rest."
     ),
 )
 def get_lobbies_deck(
     db: Session = Depends(get_db),
     user_id: UUID = Depends(get_current_user_id),
-    interest_ids: list[int] | None = Query(default=None),
+    interest_id: int | None = None,
+    include_other_activities: bool = False,
+    interest_ids: Annotated[list[int] | None, Query()] = None,
 ):
     now = datetime.now(MONTREAL)
 
@@ -99,9 +106,33 @@ def get_lobbies_deck(
 
     ranked = rank_lobbies(user_interests_ids, schedule_lists, match_lobbies, now)
 
-    if interest_ids:
+    preferred_interest_id = interest_id
+    if preferred_interest_id is None and interest_ids:
         wanted = set(interest_ids)
         ranked = [lobby for lobby in ranked if lobby.interest_id in wanted]
+    elif ranked and preferred_interest_id is None:
+        preferred_interest_id = (
+            db.query(models.Lobby.interest_id)
+            .join(models.Swipe, models.Swipe.lobby_id == models.Lobby.id)
+            .filter(models.Swipe.user_id == user_id, models.Swipe.liked.is_(True))
+            .order_by(models.Swipe.created_at.desc(), models.Swipe.lobby_id.desc())
+            .limit(1)
+            .scalar()
+        )
+    if preferred_interest_id is not None:
+        if include_other_activities:
+            matching_ids = {preferred_interest_id}
+            preferred = db.get(models.Interest, preferred_interest_id)
+            if preferred is not None:
+                equivalents = (
+                    db.query(models.Interest.id)
+                    .filter(func.lower(func.trim(models.Interest.interest)) == preferred.interest.strip().lower())
+                    .all()
+                )
+                matching_ids.update(id_ for (id_,) in equivalents)
+            ranked.sort(key=lambda lobby: lobby.interest_id not in matching_ids)
+        else:
+            ranked = [lobby for lobby in ranked if lobby.interest_id == preferred_interest_id]
 
     lobbies_by_id = {lobby.id: lobby for lobby in lobbies}
     return [lobbies_by_id[m.id] for m in ranked]
