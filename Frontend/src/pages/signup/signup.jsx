@@ -31,12 +31,28 @@ export default function SignupPage({ onShowLogin, onShowLanding }) {
 
           <label>
             Faculty
-            <input name="faculty" placeholder="e.g. Engineering" required />
+            <select name="faculty" defaultValue="" required>
+              <option value="" disabled hidden>Choose a faculty</option>
+                <option value="Engineering">Engineering</option>
+                <option value="Science">Science</option>
+                <option value="Medicine">Medicine</option>
+                <option value="Business">Business</option>
+                <option value="Law">Law</option>
+                <option value="Arts">Arts</option>
+            </select>
           </label>
 
           <label>
             Major
-            <input name="major" placeholder="e.g. Computer Engineering" required />
+            <select name="faculty" defaultValue="" required>
+              <option value="" disabled hidden>Choose a Major</option>
+              <option value="Engineering">Engineering</option>
+              <option value="Science">Science</option>
+              <option value="Medicine">Medicine</option>
+              <option value="Business">Business</option>
+              <option value="Law">Law</option>
+              <option value="Arts">Arts</option>
+            </select>
           </label>
 
           <label>
@@ -56,6 +72,7 @@ export default function SignupPage({ onShowLogin, onShowLanding }) {
           <label>
             Role
             <select name="role" defaultValue="" required>
+              <option value="" disabled hidden>Select a role</option>
               <option value="Student">Student</option>
               <option value="Faculty">Clubs</option>
             </select>
