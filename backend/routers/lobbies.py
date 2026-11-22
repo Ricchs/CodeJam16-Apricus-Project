@@ -10,6 +10,7 @@ from schemas.lobby import LobbyCreate, LobbyOut
 from services.matching import MONTREAL, TimeBlock, rank_lobbies
 from services.matching import Lobby as MatchLobby
 from sqlalchemy.orm import Session
+from sqlalchmy import or_
 
 router = APIRouter()
 
@@ -71,7 +72,6 @@ def get_lobbies_deck(
         for row in schedule_blocks
     ]
 
-
     members_by_lobby = defaultdict(lambda: defaultdict(set))
     for lobby_id, member_id, interest_id in member_interests:
         members = members_by_lobby[lobby_id]
@@ -86,7 +86,7 @@ def get_lobbies_deck(
             start_time=lobby.starts_at,
             end_time=lobby.ends_at,
             capacity=lobby.capacity,
-            member_interests=list(members_by_lobby[lobby.id].values())
+            member_interests=list(members_by_lobby[lobby.id].values()),
         )
         for lobby in lobbies
     ]
@@ -95,6 +95,26 @@ def get_lobbies_deck(
 
     lobbies_by_id = {lobby.id: lobby for lobby in lobbies}
     return [lobbies_by_id[m.id] for m in ranked]
+
+
+@router.get("/lobbies/mine", response_model=list[LobbyOut])
+def get_my_lobbies(
+    db: Session = Depends(get_db), user_id: UUID = Depends(get_current_user_id)
+):
+    joined_ids = db.query(models.LobbyMember.lobby_id).filter(
+        models.LobbyMember.user_id == user_id
+    )
+    return (
+        db.query(models.Lobby)
+        .filter(
+            or_(
+                models.Lobby.host_id == user_id,
+                models.Lobby.id.in_(joined_ids),
+            )
+        )
+        .order_by(models.Lobby.starts_at)
+        .all()
+    )
 
 
 @router.post("/lobbies", response_model=LobbyOut)
