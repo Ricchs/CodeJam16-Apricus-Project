@@ -1,6 +1,6 @@
 import { supabase } from "../../../supabase.js";
 
-async function request(path, { body, signal, authenticated = false, allowSignedOut = false } = {}) {
+async function request(path, { body, signal, authenticated = false, allowSignedOut = false, cache } = {}) {
   const base = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, "");
   if (!base) throw new Error("Set VITE_API_URL to the Apricus backend URL.");
   const url = new URL((base.endsWith("/api") ? base : base + "/api") + path);
@@ -24,6 +24,7 @@ async function request(path, { body, signal, authenticated = false, allowSignedO
     body: body ? JSON.stringify(body) : undefined,
     headers,
     signal,
+    cache,
     redirect: "error",
   });
   if (!response.ok) {
@@ -37,7 +38,10 @@ async function request(path, { body, signal, authenticated = false, allowSignedO
 }
 
 export const getLobbies = (signal) => request("/lobbies", { signal });
-export const getLobbyDeck = (signal) => request("/lobbies/deck", { signal, authenticated: true });
+export const getLobbyDeck = (signal, interestId) => {
+  const query = interestId == null ? "" : `?${new URLSearchParams({ interest_id: interestId })}`;
+  return request(`/lobbies/deck${query}`, { signal, authenticated: true, cache: "no-store" });
+};
 export const getInterests = (signal) => request("/interests/", { signal });
 export const createLobby = (body) => request("/lobbies", { body, authenticated: true });
 

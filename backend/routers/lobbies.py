@@ -26,7 +26,9 @@ def get_lobbies(db: Session = Depends(get_db)):
     description="After an Interested choice, only eligible lobbies in that activity are returned.",
 )
 def get_lobbies_deck(
-    db: Session = Depends(get_db), user_id: UUID = Depends(get_current_user_id)
+    db: Session = Depends(get_db),
+    user_id: UUID = Depends(get_current_user_id),
+    interest_id: int | None = None,
 ):
     now = datetime.now(MONTREAL)
 
@@ -97,7 +99,8 @@ def get_lobbies_deck(
 
     ranked = rank_lobbies(user_interests_ids, schedule_lists, match_lobbies, now)
 
-    if ranked:
+    preferred_interest_id = interest_id
+    if ranked and preferred_interest_id is None:
         preferred_interest_id = (
             db.query(models.Lobby.interest_id)
             .join(models.Swipe, models.Swipe.lobby_id == models.Lobby.id)
@@ -106,8 +109,8 @@ def get_lobbies_deck(
             .limit(1)
             .scalar()
         )
-        if preferred_interest_id is not None:
-            ranked = [lobby for lobby in ranked if lobby.interest_id == preferred_interest_id]
+    if preferred_interest_id is not None:
+        ranked = [lobby for lobby in ranked if lobby.interest_id == preferred_interest_id]
 
     lobbies_by_id = {lobby.id: lobby for lobby in lobbies}
     return [lobbies_by_id[m.id] for m in ranked]
