@@ -1,14 +1,15 @@
-import React from "react";
+import React, { useState } from "react";
 
-export default function LobbySwipeDeck({ lobbies, interests, preferences, setPreferences, choices, setChoices }) {
+export default function LobbySwipeDeck({ deck, lobbies, interests, preferences, setPreferences, choices, onChoose }) {
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const selected = new Set(preferences);
   const activityNames = new Map(interests.map(({ id, interest }) => [id, interest]));
   const history = lobbies.filter(({ id }) => Object.hasOwn(choices, id));
   const now = Date.now();
-  const lobby = lobbies
+  const lobby = deck
     .filter((item) => Date.parse(item.starts_at) > now && !Object.hasOwn(choices, item.id))
-    .sort((a, b) => Number(selected.has(b.interest_id)) - Number(selected.has(a.interest_id))
-      || Date.parse(a.starts_at) - Date.parse(b.starts_at))[0];
+    .sort((a, b) => Number(selected.has(b.interest_id)) - Number(selected.has(a.interest_id)))[0];
 
   function toggleInterest(id) {
     setPreferences((current) => current.includes(id)
@@ -16,8 +17,17 @@ export default function LobbySwipeDeck({ lobbies, interests, preferences, setPre
       : [...current, id]);
   }
 
-  function choose(liked) {
-    setChoices((current) => ({ ...current, [lobby.id]: liked }));
+  async function choose(liked) {
+    if (saving) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      await onChoose(lobby, liked);
+    } catch (error) {
+      setSaveError(error.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -41,9 +51,10 @@ export default function LobbySwipeDeck({ lobbies, interests, preferences, setPre
             <p>{lobby.location || "Location TBD"} · {new Date(lobby.starts_at).toLocaleString()}</p>
           </article>
           <div className="ap-dashboard__actions ap-dashboard__recommendation-actions">
-            <button type="button" onClick={() => choose(false)}>Not interested</button>
-            <button type="button" onClick={() => choose(true)}>Interested</button>
+            <button type="button" disabled={saving} onClick={() => choose(false)}>Not interested</button>
+            <button type="button" disabled={saving} onClick={() => choose(true)}>Interested</button>
           </div>
+          {saveError && <p role="alert">{saveError}</p>}
         </>
       ) : <p role="status">No more upcoming lobbies to review.</p>}
       <section aria-labelledby="lobby-choice-history">

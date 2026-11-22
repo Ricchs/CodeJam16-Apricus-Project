@@ -15,7 +15,7 @@ async function request(path, { body, signal, authenticated = false, allowSignedO
     const { data, error } = await supabase.auth.getSession();
     if (error) throw error;
     if (!data.session && allowSignedOut) return [];
-    if (!data.session) throw new Error("Log in to join a lobby.");
+    if (!data.session) throw new Error("Log in to continue.");
     headers.Authorization = `Bearer ${data.session.access_token}`;
   }
   if (body) headers["Content-Type"] = "application/json";
@@ -37,6 +37,7 @@ async function request(path, { body, signal, authenticated = false, allowSignedO
 }
 
 export const getLobbies = (signal) => request("/lobbies", { signal });
+export const getLobbyDeck = (signal) => request("/lobbies/deck", { signal, authenticated: true });
 export const getInterests = (signal) => request("/interests/", { signal });
 export const createLobby = (body) => request("/lobbies", { body, authenticated: true });
 
@@ -45,3 +46,8 @@ export const getJoinedLobbies = (signal) =>
 
 export const joinLobby = (id) =>
   request(`/lobbies/${encodeURIComponent(id)}/join`, { body: {}, authenticated: true });
+
+export const getSwipes = (signal) => request("/swipes", { signal, authenticated: true });
+
+export const saveSwipe = (lobbyId, liked) =>
+  request("/swipes", { body: { lobby_id: lobbyId, liked }, authenticated: true });

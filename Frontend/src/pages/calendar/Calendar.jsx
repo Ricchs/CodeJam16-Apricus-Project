@@ -16,7 +16,7 @@ import {
   startOfWeek,
 } from "./calendarUtils";
 
-const EMPTY_LOBBY_CHOICES = {};
+const EMPTY_LOBBIES = [];
 const STORAGE_KEY = "apricus-calendar-events-v1";
 const weekdayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const monthFormatter = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" });
@@ -220,7 +220,19 @@ function WeekGrid({ activeDate, eventsByDay, onDayClick, onEventClick }) {
   );
 }
 
-export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY, className = "", onEventsChange, lobbyChoices = EMPTY_LOBBY_CHOICES }) {
+function lobbyCalendarEvent(lobby) {
+  return {
+    id: `lobby-${lobby.id}`,
+    title: lobby.title,
+    start: lobby.starts_at,
+    end: lobby.ends_at,
+    category: "social",
+    location: lobby.location || "",
+    source: "lobby",
+  };
+}
+
+export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY, className = "", onEventsChange, interestedLobbies = EMPTY_LOBBIES, initialDate }) {
   const [events, setEvents] = useState(() => readSavedEvents(storageKey, initialEvents));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -231,7 +243,7 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
   const [editingBlock, setEditingBlock] = useState(null);
   const [blockError, setBlockError] = useState("");
   const [scheduleError, setScheduleError] = useState("");
-  const [activeDate, setActiveDate] = useState(() => new Date());
+  const [activeDate, setActiveDate] = useState(() => initialDate ? new Date(initialDate) : new Date());
   const [view, setView] = useState("week");
   const [enabledCategories, setEnabledCategories] = useState(() => new Set(CALENDAR_CATEGORIES.map((category) => category.id)));
   const [draft, setDraft] = useState(null);
@@ -239,6 +251,10 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
   const [lobbyError, setLobbyError] = useState("");
   const [selectedLobby, setSelectedLobby] = useState(null);
   const fileInput = useRef(null);
+
+  useEffect(() => {
+    if (initialDate) setActiveDate(new Date(initialDate));
+  }, [initialDate]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -262,37 +278,20 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
 
     async function loadLobbyEvents() {
       try {
-        const ids = new Set(Object.keys(lobbyChoices).filter((id) => lobbyChoices[id] === true));
-        try {
-          for (const id of await getJoinedLobbies(signal)) ids.add(id);
-        } catch {
-          if (!signal.aborted) setLobbyError("Could not load joined lobbies.");
-        }
-        if (signal.aborted) return;
-        if (!ids.size) {
-          setLobbyEvents([]);
-          return;
-        }
+        const ids = new Set(await getJoinedLobbies(signal));
+        if (signal.aborted || !ids.size) return;
         const lobbies = await getLobbies(signal);
         if (signal.aborted) return;
-        setLobbyEvents(lobbies.filter(({ id }) => ids.has(id)).map((lobby) => ({
-          id: `lobby-${lobby.id}`,
-          title: lobby.title,
-          start: lobby.starts_at,
-          end: lobby.ends_at,
-          category: "social",
-          location: lobby.location || "",
-          source: "lobby",
-        })));
+        setLobbyEvents(lobbies.filter(({ id }) => ids.has(id)).map(lobbyCalendarEvent));
       } catch {
-        if (!signal.aborted) setLobbyError("Could not load lobby events.");
+        if (!signal.aborted) setLobbyError("Could not load joined lobbies.");
       }
     }
 
     setLobbyError("");
     loadLobbyEvents();
     return () => controller.abort();
-  }, [lobbyChoices]);
+  }, []);
 
   const weeklyEvents = useMemo(() => {
     const firstDay = view === "week" ? startOfWeek(activeDate)
@@ -307,9 +306,11 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
       }));
     }).flat();
   }, [activeDate, blocks, view]);
-  const calendarEvents = useMemo(
-    () => [...events, ...lobbyEvents, ...weeklyEvents], [events, lobbyEvents, weeklyEvents],
-  );
+  const calendarEvents = useMemo(() => {
+    const lobbies = new Map(interestedLobbies.map(lobbyCalendarEvent).map((event) => [event.id, event]));
+    for (const event of lobbyEvents) lobbies.set(event.id, event);
+    return [...events, ...lobbies.values(), ...weeklyEvents];
+  }, [events, interestedLobbies, lobbyEvents, weeklyEvents]);
   const filteredEvents = useMemo(
     () => sortEvents(calendarEvents.filter((event) => enabledCategories.has(event.category))),
     [calendarEvents, enabledCategories],
