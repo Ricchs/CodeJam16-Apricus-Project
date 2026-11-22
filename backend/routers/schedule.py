@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 from models import ScheduleBlock
-from schemas import ScheduleBlockCreate, ScheduleBlockOut
+from schemas.schedule_block import ScheduleBlockCreate, ScheduleBlockOut
 from deps import get_current_user_id
 
 router = APIRouter(
