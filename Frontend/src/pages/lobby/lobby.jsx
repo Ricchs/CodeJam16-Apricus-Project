@@ -14,7 +14,7 @@ function demoLobbies() {
   }];
 }
 
-function loadLobbies() {
+export function loadLobbies() {
   try {
     const saved = JSON.parse(localStorage.getItem(key));
     return Array.isArray(saved) ? saved : demoLobbies();
