@@ -79,7 +79,7 @@ function CampusSlideshow() {
   );
 }
 
-export default function LandingPage({ onShowLogin, onShowSignup, onShowCalendar, onShowLanding }) {
+export default function LandingPage({ onShowLogin, onShowSignup }) {
   return (
     <main className="landing">
       <header className="landing-nav">
@@ -91,9 +91,6 @@ export default function LandingPage({ onShowLogin, onShowSignup, onShowCalendar,
           </button>
           <button type="button" onClick={onShowSignup}>
             Create an account
-          </button>
-          <button type="button" onClick={onShowCalendar}>
-            Calendar
           </button>
         </nav>
       </header>
