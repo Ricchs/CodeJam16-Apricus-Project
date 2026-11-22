@@ -6,20 +6,17 @@ import models
 from database import get_db
 from deps import get_current_user_id
 from fastapi import APIRouter, Depends, HTTPException
-from schemas.lobby import LobbyCreate, LobbyOut, LobbyDetail, MemberOut
+from python import Query
+from schemas.lobby import LobbyCreate, LobbyDetail, LobbyOut, MemberOut
 from services.matching import MONTREAL, TimeBlock, rank_lobbies
 from services.matching import Lobby as MatchLobby
-from sqlalchemy.orm import Session
 from sqlalchemy import or_
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
 
 @router.get("/lobbies", response_model=list[LobbyOut])
-def get_lobbies(db: Session = Depends(get_db)):
-    return db.query(models.Lobby).all()
-
-
 @router.get(
     "/lobbies/deck",
     response_model=list[LobbyOut],
@@ -31,7 +28,7 @@ def get_lobbies(db: Session = Depends(get_db)):
 def get_lobbies_deck(
     db: Session = Depends(get_db),
     user_id: UUID = Depends(get_current_user_id),
-    interest_id: int | None = None,
+    interest_ids: list[int] | None = Query(default=None),
 ):
     now = datetime.now(MONTREAL)
 
@@ -102,18 +99,9 @@ def get_lobbies_deck(
 
     ranked = rank_lobbies(user_interests_ids, schedule_lists, match_lobbies, now)
 
-    preferred_interest_id = interest_id
-    if ranked and preferred_interest_id is None:
-        preferred_interest_id = (
-            db.query(models.Lobby.interest_id)
-            .join(models.Swipe, models.Swipe.lobby_id == models.Lobby.id)
-            .filter(models.Swipe.user_id == user_id, models.Swipe.liked.is_(True))
-            .order_by(models.Swipe.created_at.desc(), models.Swipe.lobby_id.desc())
-            .limit(1)
-            .scalar()
-        )
-    if preferred_interest_id is not None:
-        ranked = [lobby for lobby in ranked if lobby.interest_id == preferred_interest_id]
+    if interest_ids:
+        wanted = set(interest_ids)
+        ranked = [lobby for lobby in ranked if lobby.interest_id in wanted]
 
     lobbies_by_id = {lobby.id: lobby for lobby in lobbies}
     return [lobbies_by_id[m.id] for m in ranked]
