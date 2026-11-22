@@ -20,7 +20,11 @@ def get_lobbies(db: Session = Depends(get_db)):
     return db.query(models.Lobby).all()
 
 
-@router.get("/lobbies/deck", response_model=list[LobbyOut])
+@router.get(
+    "/lobbies/deck",
+    response_model=list[LobbyOut],
+    description="After an Interested choice, only eligible lobbies in that activity are returned.",
+)
 def get_lobbies_deck(
     db: Session = Depends(get_db), user_id: UUID = Depends(get_current_user_id)
 ):
@@ -103,7 +107,7 @@ def get_lobbies_deck(
             .scalar()
         )
         if preferred_interest_id is not None:
-            ranked.sort(key=lambda lobby: lobby.interest_id != preferred_interest_id)
+            ranked = [lobby for lobby in ranked if lobby.interest_id == preferred_interest_id]
 
     lobbies_by_id = {lobby.id: lobby for lobby in lobbies}
     return [lobbies_by_id[m.id] for m in ranked]

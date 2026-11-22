@@ -17,6 +17,8 @@ const tabs = [
 function Discover({ onShowLobbies, choices, onChoose }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const [refreshingDeck, setRefreshingDeck] = useState(false);
+  const [deckError, setDeckError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -31,15 +33,22 @@ function Discover({ onShowLobbies, choices, onChoose }) {
     return () => controller.abort();
   }, []);
 
-  async function chooseAndRefresh(lobby, liked) {
-    await onChoose(lobby, liked);
-    setError("");
+  async function refreshDeck() {
+    setRefreshingDeck(true);
+    setDeckError("");
     try {
       const deck = await getLobbyDeck();
       setData((current) => ({ ...current, deck }));
     } catch (error) {
-      setError(`Choice saved. Could not refresh recommendations. ${error.message}`);
+      setDeckError(error.message);
+    } finally {
+      setRefreshingDeck(false);
     }
+  }
+
+  async function chooseAndRefresh(lobby, liked) {
+    await onChoose(lobby, liked);
+    await refreshDeck();
   }
 
   return (
@@ -48,7 +57,8 @@ function Discover({ onShowLobbies, choices, onChoose }) {
       {error && <p role="alert">{error}</p>}
       {!data && !error && <p role="status">Loading activities…</p>}
       {data && <LobbySwipeDeck {...data}
-        choices={choices} onChoose={chooseAndRefresh} />}
+        choices={choices} onChoose={chooseAndRefresh} refreshing={refreshingDeck}
+        deckError={deckError} onRetry={refreshDeck} />}
       <div className="ap-dashboard__actions">
         <button type="button" onClick={onShowLobbies}>Browse lobbies</button>
       </div>
