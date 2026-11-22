@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
-from models import User
+from models import User, Interest, UserInterest
 from schemas.user_profile import (
     UserProfileCreate,
     UserProfileUpdate,
     UserProfileOut,
 )
+from schemas.interest import InterestOut
+from schemas.user_interests import UserInterestsUpdate
 from uuid import UUID
 
 from deps import get_current_user_id
@@ -86,6 +88,60 @@ def update_my_profile(
 
     return user
 
+
+@router.put('/me/interests', response_model=list[InterestOut])
+def update_my_interests(
+    interest_data: UserInterestsUpdate, 
+    user_id: UUID = Depends(get_current_user_id), 
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(
+        User.id == user_id
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404, 
+            detail='User profile not found.'
+        )
+    
+    interest_ids = list(dict.fromkeys(
+        interest_data.interest_ids
+    ))
+
+    interests = db.query(Interest).filter(
+        Interest.id.in_(interest_ids)
+    ).all() if interest_ids else []
+
+    if len(interests) != len(interest_ids):
+        raise HTTPException(
+            status_code=404, 
+            detail='One or more interests do not exist.'
+        )
+    
+    db.query(UserInterest).filter(
+        UserInterest.user_id == user_id
+    ).delete(synchronize_session=False)
+
+    for interest_id in interest_ids:
+        db.add(
+            UserInterest(
+                user_id=user_id, 
+                interest_id=interest_id
+            )
+        )
+    
+    db.commit()
+
+    return db.query(Interest).join(
+        UserInterest, 
+        Interest.id == UserInterest.interest_id
+    ).filter(
+        UserInterest.user_id == user_id 
+    ).order_by(
+        Interest.id
+    ).all()
+
 @router.get('/{user_id}', response_model=UserProfileOut)
 def get_user_profile(
     user_id: UUID,
@@ -102,3 +158,4 @@ def get_user_profile(
         )
 
     return user
+
