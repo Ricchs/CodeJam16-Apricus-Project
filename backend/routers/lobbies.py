@@ -5,7 +5,7 @@ from uuid import UUID
 import models
 from database import get_db
 from deps import get_current_user_id
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from schemas.lobby import LobbyCreate, LobbyOut
 from services.matching import MONTREAL, TimeBlock, rank_lobbies
 from services.matching import Lobby as MatchLobby
@@ -108,3 +108,42 @@ def create_lobby(
     db.commit()
     db.refresh(lobby)
     return lobby
+
+
+@router.get("/lobbies/joined", response_model=list[UUID])
+def get_joined_lobbies(
+    db: Session = Depends(get_db),
+    user_id: UUID = Depends(get_current_user_id),
+):
+    return [
+        lobby_id
+        for (lobby_id,) in db.query(models.LobbyMember.lobby_id)
+        .filter_by(user_id=user_id)
+        .all()
+    ]
+
+
+@router.post("/lobbies/{lobby_id}/join")
+def join_lobby(
+    lobby_id: UUID,
+    db: Session = Depends(get_db),
+    user_id: UUID = Depends(get_current_user_id),
+):
+    # Lock the lobby while checking capacity and adding a member.
+    lobby = db.get(models.Lobby, lobby_id, with_for_update=True)
+    if lobby is None:
+        raise HTTPException(status_code=404, detail="Lobby not found.")
+    if lobby.host_id == user_id:
+        raise HTTPException(status_code=409, detail="You host this lobby.")
+    if db.get(models.LobbyMember, (lobby_id, user_id)) is not None:
+        return {"joined": True}
+    if lobby.starts_at <= datetime.now(MONTREAL):
+        raise HTTPException(status_code=409, detail="This lobby has already started.")
+    if db.get(models.User, user_id) is None:
+        raise HTTPException(status_code=403, detail="Create your Apricus profile before joining.")
+    if db.query(models.LobbyMember).filter_by(lobby_id=lobby_id).count() >= lobby.capacity:
+        raise HTTPException(status_code=409, detail="This lobby is full.")
+
+    db.add(models.LobbyMember(lobby_id=lobby_id, user_id=user_id))
+    db.commit()
+    return {"joined": True}

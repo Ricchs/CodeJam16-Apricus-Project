@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import LoginPage from "./pages/login/login.jsx";
 import SignupPage from "./pages/signup/signup.jsx";
@@ -7,10 +7,29 @@ import CalendarPage from "./pages/calendar/Calendar.jsx";
 import LobbyPage from "./pages/lobby/lobby.jsx";
 import SettingsPage from "./pages/settings/usr_settings.jsx";
 import Dashboard from "./pages/dashboard/dashboard.jsx";
+import { supabase } from "../supabase.js";
 import "./style.css";
 
 function App() {
-  const [page, setPage] = useState("home");
+  const [page, setPage] = useState(supabase ? null : "home");
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "INITIAL_SESSION") {
+        setPage(session ? "dashboard" : "home");
+      } else if (event === "SIGNED_OUT") {
+        setPage("home");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (page === null) {
+    return <p role="status">Checking your session…</p>;
+  }
 
   const showHome = () => setPage("home");
   const showLogin = () => setPage("login");
