@@ -104,12 +104,14 @@ export default function LobbyPage() {
 
   const names = new Map(interests.map(({ id, interest: name }) => [id, name]));
   const query = search.trim().toLowerCase();
-  const visible = lobbies.filter((row) =>
+  const matchingLobbies = lobbies.filter((row) =>
     (!filter || String(row.interest_id) === filter) &&
     [row.title, row.location, names.get(row.interest_id)].some((value) =>
       String(value ?? "").toLowerCase().includes(query)
     )
   ).sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));
+
+  const visible = query || filter ? matchingLobbies : matchingLobbies.slice(0, 2);
 
   return (
     <main className="ap-lobby">
