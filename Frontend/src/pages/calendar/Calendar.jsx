@@ -26,7 +26,8 @@ function readSavedEvents(storageKey, initialEvents) {
   if (typeof window === "undefined") return initialEvents;
   try {
     const saved = window.localStorage.getItem(storageKey);
-    return saved ? JSON.parse(saved) : initialEvents;
+    const parsed = saved ? JSON.parse(saved) : initialEvents;
+    return Array.isArray(parsed) ? parsed : initialEvents;
   } catch {
     return initialEvents;
   }
@@ -220,9 +221,7 @@ function WeekGrid({ activeDate, eventsByDay, onDayClick, onEventClick }) {
 }
 
 export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY, className = "", onEventsChange, lobbyChoices = EMPTY_LOBBY_CHOICES }) {
-  const [events, setEvents] = useState([]);
-  const [legacyEvents, setLegacyEvents] = useState(() => readSavedEvents(storageKey, initialEvents));
-  const [ready, setReady] = useState(null);
+  const [events, setEvents] = useState(() => readSavedEvents(storageKey, initialEvents));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -244,13 +243,6 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
-    scheduleRequest("/events", { signal }).then((rows) => {
-      if (signal.aborted) return;
-      setEvents(rows ?? []);
-      setReady(rows !== null);
-    }).catch((requestError) => {
-      if (!signal.aborted) setError(requestError.message);
-    });
     scheduleRequest("/me", { signal }).then((rows) => {
       if (!signal.aborted) setBlocks(rows);
     }).catch((requestError) => {
@@ -260,8 +252,9 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
   }, []);
 
   useEffect(() => {
-    if (ready) onEventsChange?.(events);
-  }, [events, ready, onEventsChange]);
+    try { window.localStorage.setItem(storageKey, JSON.stringify(events)); } catch { /* Storage may be disabled. */ }
+    onEventsChange?.(events);
+  }, [events, storageKey, onEventsChange]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -362,14 +355,14 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
     } else if (event.source) {
       setSelectedLobby(event);
     } else {
-      if (!ready || busy) return;
+      if (busy) return;
       setError("");
       setSelectedLobby(null);
       setDraft(draftFromEvent(event));
     }
   }
   async function runCalendarAction(action) {
-    if (!ready || busy) return;
+    if (busy) return;
     setBusy(true);
     setError("");
     setNotice("");
@@ -441,12 +434,7 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
 
   function saveEvent(event) {
     return runCalendarAction(async () => {
-      if (draft.id) {
-        const saved = await scheduleRequest(`/events/${encodeURIComponent(event.id)}`, { method: "PUT", body: event });
-        setEvents((current) => current.map((item) => item.id === saved.id ? saved : item));
-      } else {
-        setEvents(await scheduleRequest("/events", { method: "POST", body: [event] }));
-      }
+      setEvents((current) => current.map((item) => item.id === event.id ? event : item));
       setActiveDate(new Date(event.start));
       setDraft(null);
     });
@@ -455,16 +443,19 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
   function deleteEvent() {
     return runCalendarAction(async () => {
       const { id } = draft;
-      await scheduleRequest(`/events/${encodeURIComponent(id)}`, { method: "DELETE" });
       setEvents((current) => current.filter((event) => event.id !== id));
       setDraft(null);
     });
   }
 
-  async function uploadEvents(added) {
+  function importEvents(added) {
     if (!added.length) throw new Error("No calendar events were found.");
     if (added.length > 1000) throw new Error("Import a file with 1,000 events or fewer.");
-    setEvents(await scheduleRequest("/events", { method: "POST", body: added }));
+    setEvents((current) => {
+      const byId = new Map(added.map((event) => [event.id, event]));
+      for (const event of current) byId.set(event.id, event);
+      return Array.from(byId.values());
+    });
     const focus = added.find((event) => new Date(event.end) > new Date()) || added[0];
     setActiveDate(new Date(focus.start));
     setEnabledCategories(new Set(CALENDAR_CATEGORIES.map(({ id }) => id)));
@@ -495,16 +486,8 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
     input.value = "";
     if (!file) return;
     return runCalendarAction(async () => {
-      await uploadEvents(importIcs(await file.text()));
+      importEvents(importIcs(await file.text()));
       setNotice("Calendar file imported.");
-    });
-  }
-
-  function copyBrowserEvents() {
-    return runCalendarAction(async () => {
-      await uploadEvents(legacyEvents);
-      setLegacyEvents([]);
-      setNotice("Browser events copied to your account.");
     });
   }
 
@@ -518,21 +501,16 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
         </div>
         <div className="ap-calendar__top-actions">
           <input ref={fileInput} className="ap-calendar__file-input" type="file" accept=".ics,text/calendar" onChange={importCalendar} aria-label="Import calendar file" />
-          <button className="ap-calendar__button ap-calendar__button--quiet" type="button" disabled={!ready || busy} onClick={() => fileInput.current?.click()}>Import .ics</button>
+          <button className="ap-calendar__button ap-calendar__button--quiet" type="button" disabled={busy} onClick={() => fileInput.current?.click()}>Import .ics</button>
           <button className="ap-calendar__button ap-calendar__button--quiet" type="button" onClick={downloadCalendar}>Export .ics</button>
           <button className="ap-calendar__button ap-calendar__button--primary" type="button" disabled={!blocks || busy} onClick={() => openNewEvent()}>＋ Add event</button>
         </div>
       </header>
 
-      {ready === null && !error && <p role="status">Loading calendar…</p>}
+      {!blocks && !scheduleError && <p role="status">Loading calendar…</p>}
       {!draft && error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
       {scheduleError && <p role="alert">Weekly schedule could not load. {scheduleError}</p>}
-      {ready && legacyEvents.length > 0 && (
-        <button className="ap-calendar__button" type="button" disabled={busy} onClick={copyBrowserEvents}>
-          Copy saved browser events to this account
-        </button>
-      )}
       <div className="ap-calendar__layout">
         <aside className="ap-calendar__sidebar" aria-label="Calendar filters">
           <button className="ap-calendar__button ap-calendar__button--primary ap-calendar__sidebar-add" type="button" disabled={!blocks || busy} onClick={() => openNewEvent()}>＋ New event</button>
@@ -589,7 +567,7 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
               <button className="ap-calendar__button" type="button" onClick={() => setSelectedLobby(null)}>Close details</button>
             </section>
           )}
-          <p className="ap-calendar__privacy">Calendar events and joined lobbies sync from your account.</p>
+          <p className="ap-calendar__privacy">Weekly blocks and joined lobbies sync from your account. Imported events stay in this browser.</p>
         </section>
       </div>
 
