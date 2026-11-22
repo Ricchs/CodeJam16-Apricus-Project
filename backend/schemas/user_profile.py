@@ -1,0 +1,33 @@
+from datetime import datetime
+from uuid import UUID
+from pydantic import BaseModel, ConfigDict
+
+class UserProfileCreate(BaseModel):
+    first_name: str | None = None
+    last_name: str | None = None
+    club_name: str | None = None
+    major: str | None = None
+    faculty: str | None = None
+    year: int | None = None
+
+class UserProfileUpdate(BaseModel):
+    first_name: str | None = None
+    last_name: str | None = None
+    club_name: str | None = None
+    major: str | None = None
+    faculty: str | None = None
+    year: int | None = None
+
+class UserProfileOut(BaseModel):
+    id: UUID
+    role: str
+    first_name: str | None = None
+    last_name: str | None = None
+    club_name: str | None = None
+    major: str | None = None
+    faculty: str | None = None
+    year: int | None = None
+    created_at: datetime
+    display_name: str
+
+    model_config = ConfigDict(from_attributes=True)
