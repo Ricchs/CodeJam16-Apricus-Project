@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { createLobby, getInterests, getLobbies } from "./lobbyApi.js";
+import { createLobby, getInterests, getJoinedLobbies, getLobbies, joinLobby } from "./lobbyApi.js";
 import "./lobby.css";
 
 export default function LobbyPage() {
@@ -13,6 +13,11 @@ export default function LobbyPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const [joinedIds, setJoinedIds] = useState([]);
+  const [joiningId, setJoiningId] = useState(null);
+  const [joinError, setJoinError] = useState(null);
+  const [joinNotice, setJoinNotice] = useState(null);
+  const [membershipError, setMembershipError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -31,6 +36,12 @@ export default function LobbyPage() {
       if (!signal.aborted) setInterests(rows);
     }).catch((error) => {
       if (!signal.aborted) setInterestError(error.message);
+    });
+    setMembershipError("");
+    getJoinedLobbies(signal).then((ids) => {
+      if (!signal.aborted) setJoinedIds((current) => [...new Set([...current, ...ids])]);
+    }).catch((error) => {
+      if (!signal.aborted) setMembershipError(error.message);
     });
     return () => controller.abort();
   }, [refresh]);
@@ -76,6 +87,21 @@ export default function LobbyPage() {
     }
   }
 
+  async function handleJoin(id) {
+    if (joiningId !== null) return;
+    setJoiningId(id);
+    setJoinError(null);
+    try {
+      await joinLobby(id);
+      setJoinedIds((current) => [...new Set([...current, id])]);
+      setJoinNotice({ id, message: "Added to your calendar." });
+    } catch (error) {
+      setJoinError({ id, message: error.message });
+    } finally {
+      setJoiningId(null);
+    }
+  }
+
   const names = new Map(interests.map(({ id, interest: name }) => [id, name]));
   const query = search.trim().toLowerCase();
   const visible = lobbies.filter((row) =>
@@ -115,6 +141,7 @@ export default function LobbyPage() {
         </select></label>
         <button type="button" disabled={loading || saving} onClick={() => setRefresh((value) => value + 1)}>Refresh lobbies</button>
         {loading && <p role="status">Loading lobbies…</p>}
+        {membershipError && <p role="alert">Could not load your memberships. {membershipError}</p>}
         {listError && <p role="alert">{listError}</p>}
         {!loading && !listError && !visible.length && <p>No lobbies found.</p>}
         {visible.map((row) => (
@@ -122,6 +149,17 @@ export default function LobbyPage() {
             <h3>{row.title}</h3>
             <p>{names.get(row.interest_id) ?? "Interest"} · {row.location || "Location TBD"} · Capacity {row.capacity}</p>
             <p>{new Date(row.starts_at).toLocaleString()} to {new Date(row.ends_at).toLocaleString()}</p>
+            <button
+              type="button"
+              disabled={joiningId !== null || joinedIds.includes(row.id) || Date.parse(row.starts_at) <= Date.now()}
+              onClick={() => handleJoin(row.id)}
+            >
+              {joinedIds.includes(row.id) ? "Joined" :
+                joiningId === row.id ? "Joining…" :
+                Date.parse(row.starts_at) <= Date.now() ? "Lobby started" : "Join lobby"}
+            </button>
+            {joinNotice?.id === row.id && <p role="status">{joinNotice.message}</p>}
+            {joinError?.id === row.id && <p role="alert">{joinError.message}</p>}
           </article>
         ))}
       </section>
