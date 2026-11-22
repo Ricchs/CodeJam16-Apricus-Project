@@ -220,7 +220,18 @@ function WeekGrid({ activeDate, eventsByDay, onDayClick, onEventClick }) {
 }
 
 export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY, className = "", onEventsChange, lobbyChoices = EMPTY_LOBBY_CHOICES }) {
-  const [events, setEvents] = useState(() => readSavedEvents(storageKey, initialEvents));
+  const [events, setEvents] = useState([]);
+  const [legacyEvents, setLegacyEvents] = useState(() => readSavedEvents(storageKey, initialEvents));
+  const [ready, setReady] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [blocks, setBlocks] = useState(null);
+  const [blockFormOpen, setBlockFormOpen] = useState(false);
+  const [allowBusyLabel, setAllowBusyLabel] = useState(false);
+  const [editingBlock, setEditingBlock] = useState(null);
+  const [blockError, setBlockError] = useState("");
+  const [scheduleError, setScheduleError] = useState("");
   const [activeDate, setActiveDate] = useState(() => new Date());
   const [view, setView] = useState("week");
   const [enabledCategories, setEnabledCategories] = useState(() => new Set(CALENDAR_CATEGORIES.map((category) => category.id)));
@@ -375,6 +386,11 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
     event.preventDefault();
     if (busy || !blocks) return;
     const fields = new FormData(event.currentTarget);
+    const label = fields.get("label").trim();
+    if (!label && !allowBusyLabel) {
+      setBlockError("Enter an event name.");
+      return;
+    }
     const dayOfWeek = Number(fields.get("weekday"));
     const start = fields.get("start");
     const end = fields.get("end");
@@ -387,20 +403,35 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
     setBlockError("");
     setNotice("");
     try {
-      const block = await scheduleRequest("/", {
-        method: "POST",
+      const block = await scheduleRequest(editingBlock ? `/${editingBlock.id}` : "/", {
+        method: editingBlock ? "PUT" : "POST",
         body: {
           day_of_week: dayOfWeek,
           start_time: start,
           end_time: end,
-          label: fields.get("label").trim() || "Busy",
+          label: label || "Busy",
         },
       });
       setBlocks((current) => [...current.filter(({ id }) => id !== block.id), block]);
       setActiveDate(addDays(startOfWeek(activeDate), dayOfWeek));
       setEnabledCategories((current) => new Set([...current, "class"]));
       setBlockFormOpen(false);
-      setNotice("Weekly time block saved.");
+    } catch (requestError) {
+      setBlockError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteTimeBlock() {
+    if (!editingBlock || busy) return;
+    const { id } = editingBlock;
+    setBusy(true);
+    setBlockError("");
+    try {
+      await scheduleRequest(`/${id}`, { method: "DELETE" });
+      setBlocks((current) => current.filter((block) => block.id !== id));
+      setBlockFormOpen(false);
     } catch (requestError) {
       setBlockError(requestError.message);
     } finally {
@@ -504,12 +535,9 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
       )}
       <div className="ap-calendar__layout">
         <aside className="ap-calendar__sidebar" aria-label="Calendar filters">
-          <button className="ap-calendar__button ap-calendar__button--primary ap-calendar__sidebar-add" type="button" disabled={!ready || busy} onClick={() => openNewEvent()}>＋ New event</button>
+          <button className="ap-calendar__button ap-calendar__button--primary ap-calendar__sidebar-add" type="button" disabled={!blocks || busy} onClick={() => openNewEvent()}>＋ New event</button>
           <button className="ap-calendar__button ap-calendar__sidebar-add" type="button"
-            disabled={!blocks || busy} onClick={() => {
-              setBlockError("");
-              setBlockFormOpen(true);
-            }}>
+            disabled={!blocks || busy} onClick={() => openNewEvent(activeDate, true)}>
             Block time
           </button>
           <section className="ap-calendar__filters">
@@ -554,7 +582,7 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
             : <MonthGrid activeDate={activeDate} eventsByDay={eventsByDay} onDayClick={openNewEvent} onEventClick={openEvent} />}
           {lobbyError && <p role="alert">{lobbyError}</p>}
           {selectedLobby && (
-            <section aria-label="Lobby details">
+            <section aria-label="Event details">
               <h3>{selectedLobby.title}</h3>
               <p>{fullDateFormatter.format(new Date(selectedLobby.start))} · {formatTime(selectedLobby.start)} to {formatTime(selectedLobby.end)}</p>
               {selectedLobby.location && <p>{selectedLobby.location}</p>}
@@ -570,7 +598,7 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
           <section className="ap-calendar__dialog" role="dialog" aria-modal="true" aria-labelledby="ap-calendar-block-title">
             <div className="ap-calendar__dialog-head">
               <div>
-                <h2 id="ap-calendar-block-title">Block time</h2>
+                <h2 id="ap-calendar-block-title">{editingBlock ? "Edit weekly event" : allowBusyLabel ? "Block time" : "New weekly event"}</h2>
                 <p>Repeats every week on the selected day.</p>
               </div>
               <button className="ap-calendar__icon-button" type="button" disabled={busy}
@@ -579,7 +607,7 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
             <form className="ap-calendar__form" onSubmit={saveTimeBlock}>
               <label className="ap-calendar__field ap-calendar__field--wide">
                 <span>Day of the week</span>
-                <select name="weekday" defaultValue={(activeDate.getDay() + 6) % 7} autoFocus>
+                <select name="weekday" defaultValue={editingBlock?.day_of_week ?? (activeDate.getDay() + 6) % 7} autoFocus>
                   {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day, index) => (
                     <option key={day} value={index}>{day}</option>
                   ))}
@@ -587,19 +615,22 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
               </label>
               <label className="ap-calendar__field">
                 <span>Starts</span>
-                <input name="start" type="time" defaultValue="09:00" required />
+                <input name="start" type="time" defaultValue={editingBlock?.start_time.slice(0, 5) ?? "09:00"} required />
               </label>
               <label className="ap-calendar__field">
                 <span>Ends</span>
-                <input name="end" type="time" defaultValue="10:00" required />
+                <input name="end" type="time" defaultValue={editingBlock?.end_time.slice(0, 5) ?? "10:00"} required />
               </label>
               <label className="ap-calendar__field ap-calendar__field--wide">
-                <span>Label <small>Optional</small></span>
-                <input name="label" placeholder="Busy" maxLength={100} />
+                <span>{allowBusyLabel ? "Label" : "Event name"} {allowBusyLabel && <small>Optional</small>}</span>
+                <input name="label" defaultValue={editingBlock?.label ?? ""} placeholder={allowBusyLabel ? "Busy" : "e.g. Study group"} required={!allowBusyLabel} maxLength={100} />
               </label>
               {blockError && <p className="ap-calendar__field--wide" role="alert">{blockError}</p>}
               <div className="ap-calendar__form-actions ap-calendar__field--wide">
-                <span />
+                {editingBlock ? (
+                  <button className="ap-calendar__button ap-calendar__button--danger" type="button"
+                    disabled={busy} onClick={deleteTimeBlock}>Delete weekly event</button>
+                ) : <span />}
                 <button className="ap-calendar__button ap-calendar__button--quiet" type="button"
                   disabled={busy} onClick={() => setBlockFormOpen(false)}>Cancel</button>
                 <button className="ap-calendar__button ap-calendar__button--primary" type="submit" disabled={busy}>
