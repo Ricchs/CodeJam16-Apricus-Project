@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { CalendarDays, Compass, Settings, Users } from "lucide-react";
 import CalendarPage from "../calendar/Calendar.jsx";
 import LobbyPage from "../lobby/lobby.jsx";
@@ -19,6 +19,7 @@ function Discover({ onShowLobbies, choices, onChoose }) {
   const [error, setError] = useState("");
   const [refreshingDeck, setRefreshingDeck] = useState(false);
   const [deckError, setDeckError] = useState("");
+  const selectedActivity = useRef(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -37,7 +38,11 @@ function Discover({ onShowLobbies, choices, onChoose }) {
     setRefreshingDeck(true);
     setDeckError("");
     try {
-      const deck = await getLobbyDeck();
+      const interestId = selectedActivity.current;
+      const deck = await getLobbyDeck(undefined, interestId);
+      if (interestId != null && deck.some((lobby) => lobby.interest_id !== interestId)) {
+        throw new Error("The API returned a lobby outside the selected activity.");
+      }
       setData((current) => ({ ...current, deck }));
     } catch (error) {
       setDeckError(error.message);
@@ -48,6 +53,8 @@ function Discover({ onShowLobbies, choices, onChoose }) {
 
   async function chooseAndRefresh(lobby, liked) {
     await onChoose(lobby, liked);
+    if (liked) selectedActivity.current = lobby.interest_id;
+    else if (choices[lobby.id] === true) selectedActivity.current = null;
     await refreshDeck();
   }
 
