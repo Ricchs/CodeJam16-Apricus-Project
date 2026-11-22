@@ -10,7 +10,7 @@ export default function LobbySwipeDeck({ deck, lobbies, interests, choices, onCh
   const myLobbies = lobbies.filter(({ id }) => choices[id] === true);
   const now = Date.now();
   const dismissedLobbies = lobbies.filter(({ id, starts_at }) => choices[id] === false && Date.parse(starts_at) > now);
-  const recommendation = deck.find((item) => Date.parse(item.starts_at) > now && !Object.hasOwn(choices, item.id));
+  const recommendation = deck.find(({ id, starts_at }) => Date.parse(starts_at) > now && !Object.hasOwn(choices, id));
   const reviewLobby = reviewQueue.length > 0
     ? dismissedLobbies.find(({ id }) => reviewQueue.includes(id))
     : undefined;

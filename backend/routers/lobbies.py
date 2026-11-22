@@ -93,6 +93,18 @@ def get_lobbies_deck(
 
     ranked = rank_lobbies(user_interests_ids, schedule_lists, match_lobbies, now)
 
+    if ranked:
+        preferred_interest_id = (
+            db.query(models.Lobby.interest_id)
+            .join(models.Swipe, models.Swipe.lobby_id == models.Lobby.id)
+            .filter(models.Swipe.user_id == user_id, models.Swipe.liked.is_(True))
+            .order_by(models.Swipe.created_at.desc(), models.Swipe.lobby_id.desc())
+            .limit(1)
+            .scalar()
+        )
+        if preferred_interest_id is not None:
+            ranked.sort(key=lambda lobby: lobby.interest_id != preferred_interest_id)
+
     lobbies_by_id = {lobby.id: lobby for lobby in lobbies}
     return [lobbies_by_id[m.id] for m in ranked]
 
