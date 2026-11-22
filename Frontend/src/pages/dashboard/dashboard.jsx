@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { CalendarDays, Compass, Settings, Users } from "lucide-react";
 import CalendarPage from "../calendar/Calendar.jsx";
 import LobbyPage from "../lobby/lobby.jsx";
-import { getLobbies } from "../lobby/lobbyApi.js";
+import LobbySwipeDeck from "../lobby/LobbySwpieCard.jsx";
+import { getInterests, getLobbies } from "../lobby/lobbyApi.js";
 import SettingsPage from "../settings/usr_settings.jsx";
 import "./dashboard.css";
 
@@ -13,70 +14,38 @@ const tabs = [
   { id: "settings", label: "Account settings", Icon: Settings },
 ];
 
-function Discover({ onShowLobbies }) {
-  const [lobbies, setLobbies] = useState([]);
-  const [status, setStatus] = useState("Loading lobbies…");
+function Discover({ onShowLobbies, preferences, setPreferences, choices, setChoices }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
-    getLobbies(signal).then((rows) => {
-      if (signal.aborted) return;
-      setLobbies(rows.filter((row) => Date.parse(row.starts_at) > Date.now())
-        .sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at)));
-      setStatus("");
-    }).catch((error) => {
-      if (!signal.aborted) setStatus(error.message);
-    });
+    Promise.all([getLobbies(signal), getInterests(signal)])
+      .then(([lobbies, interests]) => {
+        if (!signal.aborted) setData({ lobbies, interests });
+      })
+      .catch((error) => {
+        if (!signal.aborted) setError(error.message);
+      });
     return () => controller.abort();
   }, []);
-  const [index, setIndex] = useState(0);
-  const startX = useRef(null);
-  const lobby = lobbies[index];
-
-  function next() {
-    setIndex((current) => Math.min(current + 1, lobbies.length));
-  }
 
   return (
     <section className="ap-dashboard__discover">
       <h1>Discover</h1>
-      {lobby ? (
-        <article
-          className="ap-dashboard__card"
-          key={lobby.id}
-          onPointerDown={(event) => { startX.current = event.clientX; }}
-          onPointerCancel={() => { startX.current = null; }}
-          onPointerUp={(event) => {
-            if (startX.current === null) return;
-            const distance = event.clientX - startX.current;
-            startX.current = null;
-            if (distance < -60) next();
-            if (distance > 60) onShowLobbies();
-          }}
-        >
-          <h2>{lobby.title}</h2>
-          <p>{lobby.location} · {new Date(lobby.starts_at).toLocaleString()}</p>
-          <div className="ap-dashboard__actions">
-            <button type="button" onClick={next}>Skip</button>
-            <button type="button" onClick={onShowLobbies}>Browse lobbies</button>
-          </div>
-        </article>
-      ) : (
-        <div className="ap-dashboard__card">
-          <p>{status || (lobbies.length ? "You’ve reached the end of the list." : "No upcoming lobbies.")}</p>
-          <div className="ap-dashboard__actions">
-            {lobbies.length > 0 && <button type="button" onClick={() => setIndex(0)}>Start over</button>}
-            <button type="button" onClick={onShowLobbies}>Browse lobbies</button>
-          </div>
-        </div>
-      )}
+      {error && <p role="alert">{error}</p>}
+      {!data && !error && <p role="status">Loading activities…</p>}
+      {data && <LobbySwipeDeck {...data} preferences={preferences} setPreferences={setPreferences}
+        choices={choices} setChoices={setChoices} />}
     </section>
   );
 }
 
 export default function Dashboard({ onLogin, onSignedOut }) {
   const [tab, setTab] = useState("calendar");
+  const [preferences, setPreferences] = useState([]);
+  const [choices, setChoices] = useState({});
   const showCalendar = () => setTab("calendar");
 
   return (
@@ -96,7 +65,8 @@ export default function Dashboard({ onLogin, onSignedOut }) {
       <div className="ap-dashboard__content">
         {tab === "calendar" && <CalendarPage />}
         {tab === "lobbies" && <LobbyPage />}
-        {tab === "discover" && <Discover onShowLobbies={() => setTab("lobbies")} />}
+        {tab === "discover" && <Discover onShowLobbies={() => setTab("lobbies")} preferences={preferences}
+          setPreferences={setPreferences} choices={choices} setChoices={setChoices} />}
         {tab === "settings" && (
           <SettingsPage onBack={showCalendar} onLogin={onLogin} onSignedOut={onSignedOut} />
         )}
