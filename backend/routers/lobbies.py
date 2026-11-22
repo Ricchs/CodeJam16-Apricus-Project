@@ -8,7 +8,7 @@ from database import get_db
 from deps import get_current_user_id
 from fastapi import APIRouter, Depends, HTTPException, Query
 from schemas.lobby import LobbyCreate, LobbyOut, LobbyDetail, MemberOut
-from services.matching import MONTREAL, TimeBlock, rank_lobbies
+from services.matching import MONTREAL, TimeBlock, rank_lobbies, score
 from services.matching import Lobby as MatchLobby
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
@@ -27,7 +27,8 @@ def get_lobbies(db: Session = Depends(get_db)):
     description=(
         "After an Interested choice, only eligible lobbies in that activity are returned. "
         "When provided, interest_id takes precedence over saved choices. "
-        "Set include_other_activities to put matching lobbies first and include the rest."
+        "Set include_other_activities to rank all upcoming, unrated lobbies from other hosts, "
+        "with matching lobbies first."
     ),
 )
 def get_lobbies_deck(
@@ -104,7 +105,14 @@ def get_lobbies_deck(
         for lobby in lobbies
     ]
 
-    ranked = rank_lobbies(user_interests_ids, schedule_lists, match_lobbies, now)
+    if include_other_activities:
+        ranked = sorted(
+            match_lobbies,
+            key=lambda lobby: score(user_interests_ids, lobby, now),
+            reverse=True,
+        )
+    else:
+        ranked = rank_lobbies(user_interests_ids, schedule_lists, match_lobbies, now)
 
     preferred_interest_id = interest_id
     if preferred_interest_id is None and interest_ids:
