@@ -23,7 +23,10 @@ def get_lobbies(db: Session = Depends(get_db)):
 @router.get(
     "/lobbies/deck",
     response_model=list[LobbyOut],
-    description="After an Interested choice, only eligible lobbies in that activity are returned.",
+    description=(
+        "After an Interested choice, only eligible lobbies in that activity are returned. "
+        "When provided, interest_id takes precedence over saved choices."
+    ),
 )
 def get_lobbies_deck(
     db: Session = Depends(get_db),
@@ -79,11 +82,11 @@ def get_lobbies_deck(
     ]
 
     members_by_lobby = defaultdict(lambda: defaultdict(set))
-    for lobby_id, member_id, interest_id in member_interests:
+    for lobby_id, member_id, member_interest_id in member_interests:
         members = members_by_lobby[lobby_id]
         members[member_id]
-        if interest_id is not None:
-            members[member_id].add(interest_id)
+        if member_interest_id is not None:
+            members[member_id].add(member_interest_id)
 
     match_lobbies = [
         MatchLobby(
