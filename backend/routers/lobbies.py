@@ -97,27 +97,6 @@ def get_lobbies_deck(
     return [lobbies_by_id[m.id] for m in ranked]
 
 
-@router.get("/lobbies/{lobby_id}", response_model=LobbyDetail)
-def get_lobby(
-    lobby_id: UUID,
-    db: Session = Depends(get_db),
-    user_id: UUID = Depends(get_current_user_id),
-):
-    lobby = db.get(models.Lobby, lobby_id)
-    if lobby is None:
-        raise HTTPException(status_code=404, detail="Lobby not found")
-
-    member_ids = db.query(models.LobbyMember.user_id).filter(
-        models.LobbyMember.lobby_id == lobby_id
-    )
-    members = db.query(models.User).filter(models.User.id.in_(member_ids)).all()
-
-    return LobbyDetail(
-        **LobbyOut.model_validate(lobby).model_dump(),
-        members=[MemberOut.model_validate(m) for m in members],
-    )
-
-
 @router.get("/lobbies/mine", response_model=list[LobbyOut])
 def get_my_lobbies(
     db: Session = Depends(get_db), user_id: UUID = Depends(get_current_user_id)
@@ -162,6 +141,27 @@ def get_joined_lobbies(
         .filter_by(user_id=user_id)
         .all()
     ]
+
+
+@router.get("/lobbies/{lobby_id}", response_model=LobbyDetail)
+def get_lobby(
+    lobby_id: UUID,
+    db: Session = Depends(get_db),
+    user_id: UUID = Depends(get_current_user_id),
+):
+    lobby = db.get(models.Lobby, lobby_id)
+    if lobby is None:
+        raise HTTPException(status_code=404, detail="Lobby not found")
+
+    member_ids = db.query(models.LobbyMember.user_id).filter(
+        models.LobbyMember.lobby_id == lobby_id
+    )
+    members = db.query(models.User).filter(models.User.id.in_(member_ids)).all()
+
+    return LobbyDetail(
+        **LobbyOut.model_validate(lobby).model_dump(),
+        members=[MemberOut.model_validate(m) for m in members],
+    )
 
 
 @router.post("/lobbies/{lobby_id}/join")
