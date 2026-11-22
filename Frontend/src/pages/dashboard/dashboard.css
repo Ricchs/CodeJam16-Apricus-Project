@@ -46,7 +46,7 @@
   font-weight: 750;
 }
 .ap-dashboard__content { min-width: 0; }
-.ap-dashboard__discover { max-width: 680px; margin: auto; padding: clamp(16px, 5vw, 48px); }
+.ap-dashboard__discover { max-width: 1160px; margin: auto; padding: clamp(16px, 5vw, 48px); }
 .ap-dashboard__card {
   padding: clamp(16px, 4vw, 32px);
   background: #fff;
@@ -54,20 +54,8 @@
   border-radius: 16px;
   overflow-wrap: anywhere;
 }
-.ap-dashboard__interests {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  border: 1px solid #e4e2ef;
-  border-radius: 10px;
-  padding: 12px;
-  margin: 0;
-}
-.ap-dashboard__interests label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .ap-dashboard__discover .ap-dashboard__actions { margin-top: 12px; }
 .ap-dashboard__actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.ap-dashboard__recommendation-actions { justify-content: space-between; }
-.ap-dashboard__recommendation-actions button:last-child { margin-inline-start: auto; }
 .ap-dashboard__actions button { background: #5347b5; color: #fff; }
 .ap-dashboard__sidebar button:focus-visible, .ap-dashboard__actions button:focus-visible {
   outline: 2px solid #5347b5;
@@ -78,4 +66,122 @@
   .ap-dashboard__sidebar { gap: 4px; padding: 8px; border: 0; border-bottom: 1px solid #e4e2ef; }
   .ap-dashboard__sidebar nav { flex-direction: row; flex-wrap: wrap; }
   .ap-dashboard__sidebar nav button:last-child { margin-top: 0; }
+}
+
+.ap-dashboard__discover-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+  gap: clamp(16px, 3vw, 32px);
+  align-items: start;
+}
+
+.ap-dashboard__deck {
+  min-width: 0;
+}
+
+.ap-dashboard__deck-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 280px;
+  border-top: 4px solid #5347b5;
+}
+
+.ap-dashboard__deck-card h2,
+.ap-dashboard__my-lobbies h2 {
+  margin: 0 0 12px;
+}
+
+.ap-dashboard__deck-category {
+  margin: 0 0 8px;
+  color: #4335a1;
+  font-weight: 650;
+}
+
+.ap-dashboard__deck-actions button {
+  flex: 1 1 8rem;
+}
+
+.ap-dashboard__deck-actions button:last-child {
+  color: #4335a1;
+  background: #eeebfc;
+}
+
+.ap-dashboard__deck-actions button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.ap-dashboard__my-lobbies {
+  padding: clamp(16px, 3vw, 24px);
+}
+
+.ap-dashboard__my-lobbies .ap-dashboard__choice-list {
+  max-height: 28rem;
+  overflow-y: auto;
+  margin-block-end: 0;
+  padding: 3px;
+}
+
+@media (max-width: 900px) {
+  .ap-dashboard__discover-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ap-dashboard__choice-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+}
+
+.ap-dashboard__choice-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px 14px;
+  border: 1px solid #e3e0ef;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.ap-dashboard__choice-details {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ap-dashboard__choice-details time {
+  color: #59586c;
+  font-size: 0.875rem;
+}
+
+.ap-dashboard__choice-remove {
+  margin-inline-start: auto;
+  padding: 8px 12px;
+  border: 1px solid #e3bfd0;
+  border-radius: 8px;
+  background: #fff5f8;
+  color: #912b53;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ap-dashboard__choice-remove:hover:not(:disabled) {
+  background: #f9e6ee;
+}
+
+.ap-dashboard__choice-remove:focus-visible {
+  outline: 2px solid #912b53;
+  outline-offset: 2px;
+}
+
+.ap-dashboard__choice-remove:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
