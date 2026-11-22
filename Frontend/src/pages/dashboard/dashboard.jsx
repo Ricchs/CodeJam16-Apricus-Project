@@ -1,7 +1,8 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { CalendarDays, Compass, Settings, Users } from "lucide-react";
 import CalendarPage from "../calendar/Calendar.jsx";
-import LobbyPage, { loadLobbies } from "../lobby/lobby.jsx";
+import LobbyPage from "../lobby/lobby.jsx";
+import { getLobbies } from "../lobby/lobbyApi.js";
 import SettingsPage from "../settings/usr_settings.jsx";
 import "./dashboard.css";
 
@@ -13,10 +14,22 @@ const tabs = [
 ];
 
 function Discover({ onShowLobbies }) {
-  const [lobbies] = useState(() =>
-    loadLobbies().filter(({ startsAt }) => startsAt > Date.now())
-      .sort((a, b) => a.startsAt - b.startsAt)
-  );
+  const [lobbies, setLobbies] = useState([]);
+  const [status, setStatus] = useState("Loading lobbies…");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
+    getLobbies(signal).then((rows) => {
+      if (signal.aborted) return;
+      setLobbies(rows.filter((row) => Date.parse(row.starts_at) > Date.now())
+        .sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at)));
+      setStatus("");
+    }).catch((error) => {
+      if (!signal.aborted) setStatus(error.message);
+    });
+    return () => controller.abort();
+  }, []);
   const [index, setIndex] = useState(0);
   const startX = useRef(null);
   const lobby = lobbies[index];
@@ -42,9 +55,8 @@ function Discover({ onShowLobbies }) {
             if (distance > 60) onShowLobbies();
           }}
         >
-          <p>{lobby.category}</p>
           <h2>{lobby.title}</h2>
-          <p>{lobby.location} · {new Date(lobby.startsAt).toLocaleString()}</p>
+          <p>{lobby.location} · {new Date(lobby.starts_at).toLocaleString()}</p>
           <div className="ap-dashboard__actions">
             <button type="button" onClick={next}>Skip</button>
             <button type="button" onClick={onShowLobbies}>Browse lobbies</button>
@@ -52,7 +64,7 @@ function Discover({ onShowLobbies }) {
         </article>
       ) : (
         <div className="ap-dashboard__card">
-          <p>{lobbies.length ? "You’ve reached the end of the list." : "No upcoming lobbies."}</p>
+          <p>{status || (lobbies.length ? "You’ve reached the end of the list." : "No upcoming lobbies.")}</p>
           <div className="ap-dashboard__actions">
             {lobbies.length > 0 && <button type="button" onClick={() => setIndex(0)}>Start over</button>}
             <button type="button" onClick={onShowLobbies}>Browse lobbies</button>
