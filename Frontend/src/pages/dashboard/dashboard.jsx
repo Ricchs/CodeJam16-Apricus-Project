@@ -14,7 +14,7 @@ const tabs = [
   { id: "settings", label: "Account settings", Icon: Settings },
 ];
 
-function Discover({ onShowLobbies, preferences, setPreferences, choices, onChoose }) {
+function Discover({ onShowLobbies, choices, onChoose }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
 
@@ -36,7 +36,7 @@ function Discover({ onShowLobbies, preferences, setPreferences, choices, onChoos
       <h1>Discover</h1>
       {error && <p role="alert">{error}</p>}
       {!data && !error && <p role="status">Loading activities…</p>}
-      {data && <LobbySwipeDeck {...data} preferences={preferences} setPreferences={setPreferences}
+      {data && <LobbySwipeDeck {...data}
         choices={choices} onChoose={onChoose} />}
       <div className="ap-dashboard__actions">
         <button type="button" onClick={onShowLobbies}>Browse lobbies</button>
@@ -47,7 +47,6 @@ function Discover({ onShowLobbies, preferences, setPreferences, choices, onChoos
 
 export default function Dashboard({ onLogin, onSignedOut }) {
   const [tab, setTab] = useState("calendar");
-  const [preferences, setPreferences] = useState([]);
   const [choices, setChoices] = useState({});
   const [interestedLobbies, setInterestedLobbies] = useState([]);
   const [loadingChoices, setLoadingChoices] = useState(true);
@@ -123,8 +122,8 @@ export default function Dashboard({ onLogin, onSignedOut }) {
           && <CalendarPage interestedLobbies={interestedLobbies} initialDate={latestInterest?.starts_at} />}
         {tab === "lobbies" && <LobbyPage />}
         {tab === "discover" && !loadingChoices && !choiceError
-          && <Discover onShowLobbies={() => setTab("lobbies")} preferences={preferences}
-            setPreferences={setPreferences} choices={choices} onChoose={onChoose} />}
+          && <Discover onShowLobbies={() => setTab("lobbies")}
+            choices={choices} onChoose={onChoose} />}
         {tab === "settings" && (
           <SettingsPage onBack={showCalendar} onLogin={onLogin} onSignedOut={onSignedOut} />
         )}
