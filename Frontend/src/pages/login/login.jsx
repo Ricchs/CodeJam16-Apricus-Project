@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { ensureUserProfile } from "../../userProfile.js";
 import { supabase } from "../../../supabase.js";
 export default function LoginPage({ onShowSignup, onShowLanding, onLogin }) {
   const [message, setMessage] = useState("");
@@ -37,6 +38,12 @@ export default function LoginPage({ onShowSignup, onShowLanding, onLogin }) {
         return;
       }
 
+      try {
+        await ensureUserProfile(data.session);
+      } catch (profileError) {
+        setMessage(profileError.message);
+        return;
+      }
       setMessage("Logged in successfully.");
       onLogin?.(data.session);
     } catch {
