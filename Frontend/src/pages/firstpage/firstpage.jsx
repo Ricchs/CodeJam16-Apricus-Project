@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-export default function LandingPage({ onShowLogin, onShowSignup, onShowCalendar, onShowLanding, onShowLobby }) {
+export default function LandingPage({ onShowLogin, onShowSignup, onShowCalendar, onShowLanding }) {
   return (
     <main className="landing">
       <header className="landing-nav">
@@ -15,12 +15,6 @@ export default function LandingPage({ onShowLogin, onShowSignup, onShowCalendar,
           </button>
           <button type="button" onClick={onShowCalendar}>
             Calendar
-          </button>
-          <button type="button" onClick={onShowLanding}>
-            Home
-          </button> 
-          <button type="button" onClick={onShowLobby}>
-            Lobby
           </button>
         </nav>
       </header>
