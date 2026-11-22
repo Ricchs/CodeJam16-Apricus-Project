@@ -5,7 +5,7 @@ import SignupPage from "./pages/signup/signup.jsx";
 import LandingPage from "./pages/firstpage/firstpage.jsx";
 import CalendarPage from "./pages/calendar/Calendar.jsx";
 import LobbyPage from "./pages/lobby/lobby.jsx";
-import SettingsPage from "./pages/settings/settings.jsx";
+import SettingsPage from "./pages/usr_setting/usr_settings.jsx";
 import "./style.css";
 
 function App() {
