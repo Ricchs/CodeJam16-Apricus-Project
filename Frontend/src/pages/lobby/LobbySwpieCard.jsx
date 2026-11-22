@@ -1,11 +1,9 @@
 import React, { useState } from "react";
 
-export default function LobbySwipeDeck({ deck, lobbies, interests, choices, onChoose }) {
+export default function LobbySwipeDeck({ deck, lobbies, interests, choices, onChoose, refreshing, deckError, onRetry }) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const [reviewQueue, setReviewQueue] = useState(() =>
-    lobbies.filter(({ id }) => choices[id] === false).map(({ id }) => id)
-  );
+  const [reviewQueue, setReviewQueue] = useState([]);
   const activityNames = new Map(interests.map(({ id, interest }) => [id, interest]));
   const myLobbies = lobbies.filter(({ id }) => choices[id] === true);
   const now = Date.now();
@@ -34,7 +32,17 @@ export default function LobbySwipeDeck({ deck, lobbies, interests, choices, onCh
     <section className="ap-dashboard__discover-layout" aria-label="Discover lobbies">
       <div className="ap-dashboard__deck">
         <article className="ap-dashboard__card ap-dashboard__deck-card" aria-labelledby="current-lobby">
-          {lobby ? (
+          {refreshing ? (
+            <h2 id="current-lobby" role="status">Updating recommendations…</h2>
+          ) : deckError ? (
+            <div>
+              <h2 id="current-lobby">Could not refresh recommendations</h2>
+              <p role="alert">{deckError}</p>
+              <div className="ap-dashboard__actions">
+                <button type="button" onClick={onRetry}>Retry</button>
+              </div>
+            </div>
+          ) : lobby ? (
             <>
               <div>
                 {activityNames.has(lobby.interest_id) && (
@@ -52,7 +60,7 @@ export default function LobbySwipeDeck({ deck, lobbies, interests, choices, onCh
           ) : (
             <div>
               <h2 id="current-lobby">No new recommendations</h2>
-              <p role="status">You’ve reached the end of the lobby deck.</p>
+              <p role="status">No more eligible lobbies match your current activity.</p>
               {dismissedLobbies.length > 0 && (
                 <div className="ap-dashboard__actions">
                   <button type="button" disabled={saving} onClick={() => {
@@ -78,7 +86,7 @@ export default function LobbySwipeDeck({ deck, lobbies, interests, choices, onCh
                   <strong>{entry.title}</strong>
                   <time dateTime={entry.starts_at}>{new Date(entry.starts_at).toLocaleString()}</time>
                 </div>
-                <button className="ap-dashboard__choice-remove" type="button" disabled={saving}
+                <button className="ap-dashboard__choice-remove" type="button" disabled={saving || refreshing}
                   aria-label={`Remove ${entry.title} from My Lobbies`}
                   onClick={() => choose(entry, false)}>
                   Remove
