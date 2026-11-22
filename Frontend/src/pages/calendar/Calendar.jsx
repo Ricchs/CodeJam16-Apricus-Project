@@ -40,21 +40,6 @@ function timeInputValue(value) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
-function emptyDraft(date = new Date()) {
-  const day = dateInputValue(date);
-  return {
-    id: "",
-    title: "",
-    date: day,
-    startTime: "09:00",
-    endTime: "10:00",
-    endDate: day,
-    category: "class",
-    location: "",
-    notes: "",
-  };
-}
-
 function draftFromEvent(event) {
   const start = new Date(event.start);
   const end = new Date(event.end);
@@ -236,7 +221,7 @@ function WeekGrid({ activeDate, eventsByDay, onDayClick, onEventClick }) {
 export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY, className = "", onEventsChange }) {
   const [events, setEvents] = useState([]);
   const [legacyEvents, setLegacyEvents] = useState(() => readSavedEvents(storageKey, initialEvents));
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -258,8 +243,8 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
     const { signal } = controller;
     scheduleRequest("/events", { signal }).then((rows) => {
       if (signal.aborted) return;
-      setEvents(rows);
-      setReady(true);
+      setEvents(rows ?? []);
+      setReady(rows !== null);
     }).catch((requestError) => {
       if (!signal.aborted) setError(requestError.message);
     });
@@ -312,7 +297,7 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
       return (blocks ?? []).filter((block) => block.day_of_week === (day.getDay() + 6) % 7).map((block) => ({
         id: `weekly-${block.id}-${date}`, title: block.label || "Schedule block",
         start: `${date}T${block.start_time.slice(0, 8)}`,
-        end: `${date}T${block.end_time.slice(0, 8)}`, category: "class", source: "weekly",
+        end: `${date}T${block.end_time.slice(0, 8)}`, category: "class", source: "weekly", block,
       }));
     }).flat();
   }, [activeDate, blocks, view]);
@@ -345,14 +330,23 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
       ? new Date(current.getFullYear(), current.getMonth() + direction, 1)
       : addDays(current, direction * 7));
   };
-  const openNewEvent = (date = activeDate) => {
-    if (!ready || busy) return;
-    setError("");
+  const openNewEvent = (date = activeDate, blockTime = false) => {
+    if (!blocks || busy) return;
     setActiveDate(date);
-    setDraft(emptyDraft(date));
+    setEditingBlock(null);
+    setAllowBusyLabel(blockTime);
+    setBlockError("");
+    setBlockFormOpen(true);
   };
   function openEvent(event) {
-    if (event.source) {
+    if (event.source === "weekly") {
+      if (busy) return;
+      setActiveDate(new Date(event.start));
+      setEditingBlock(event.block);
+      setAllowBusyLabel(event.block.label === "Busy");
+      setBlockError("");
+      setBlockFormOpen(true);
+    } else if (event.source) {
       setSelectedLobby(event);
     } else {
       if (!ready || busy) return;
@@ -493,14 +487,14 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
           <input ref={fileInput} className="ap-calendar__file-input" type="file" accept=".ics,text/calendar" onChange={importCalendar} aria-label="Import calendar file" />
           <button className="ap-calendar__button ap-calendar__button--quiet" type="button" disabled={!ready || busy} onClick={() => fileInput.current?.click()}>Import .ics</button>
           <button className="ap-calendar__button ap-calendar__button--quiet" type="button" onClick={downloadCalendar}>Export .ics</button>
-          <button className="ap-calendar__button ap-calendar__button--primary" type="button" disabled={!ready || busy} onClick={() => openNewEvent()}>＋ Add event</button>
+          <button className="ap-calendar__button ap-calendar__button--primary" type="button" disabled={!blocks || busy} onClick={() => openNewEvent()}>＋ Add event</button>
         </div>
       </header>
 
-      {!ready && !error && <p role="status">Loading calendar…</p>}
+      {ready === null && !error && <p role="status">Loading calendar…</p>}
       {!draft && error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
-      {scheduleError && ready && <p role="alert">Weekly schedule could not load. {scheduleError}</p>}
+      {scheduleError && <p role="alert">Weekly schedule could not load. {scheduleError}</p>}
       {ready && legacyEvents.length > 0 && (
         <button className="ap-calendar__button" type="button" disabled={busy} onClick={copyBrowserEvents}>
           Copy saved browser events to this account
