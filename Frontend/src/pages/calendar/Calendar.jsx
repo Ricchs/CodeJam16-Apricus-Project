@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./Calendar.css";
 import { scheduleRequest } from "./calendarApi.js";
-import { getJoinedLobbies, getLobbies } from "../lobby/lobbyApi.js";
+import { getMyLobbies } from "../lobby/lobbyApi.js";
 import {
   addDays,
   CALENDAR_CATEGORIES,
@@ -278,13 +278,10 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
 
     async function loadLobbyEvents() {
       try {
-        const ids = new Set(await getJoinedLobbies(signal));
-        if (signal.aborted || !ids.size) return;
-        const lobbies = await getLobbies(signal);
-        if (signal.aborted) return;
-        setLobbyEvents(lobbies.filter(({ id }) => ids.has(id)).map(lobbyCalendarEvent));
+        const lobbies = await getMyLobbies(signal, { allowSignedOut: true });
+        if (!signal.aborted) setLobbyEvents(lobbies.map(lobbyCalendarEvent));
       } catch {
-        if (!signal.aborted) setLobbyError("Could not load joined lobbies.");
+        if (!signal.aborted) setLobbyError("Could not load your lobbies.");
       }
     }
 
