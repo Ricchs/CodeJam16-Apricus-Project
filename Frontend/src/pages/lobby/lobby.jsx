@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import LobbySwipeDeck from "./LobbySwpieCard.jsx";
 import "./lobby.css";
 
 const categories = ["Study", "Gym", "Sports", "Food", "Seminars", "Hobbies"];
@@ -91,6 +92,7 @@ export default function LobbyPage() {
 
   return (
     <main className="ap-lobby">
+      <LobbySwipeDeck lobbies={visible} />
       <h1>Lobbies</h1>
       <p>This demo saves lobbies in this browser.</p>
       <section aria-labelledby="create-lobby">
