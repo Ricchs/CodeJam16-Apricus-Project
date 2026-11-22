@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./Calendar.css";
+import { scheduleRequest } from "./calendarApi.js";
 import { getJoinedLobbies, getLobbies } from "../lobby/lobbyApi.js";
 import {
   addDays,
@@ -40,20 +41,6 @@ function timeInputValue(value) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
-function emptyDraft(date = new Date()) {
-  const day = dateInputValue(date);
-  return {
-    id: "",
-    title: "",
-    date: day,
-    startTime: "09:00",
-    endTime: "10:00",
-    category: "class",
-    location: "",
-    notes: "",
-  };
-}
-
 function draftFromEvent(event) {
   const start = new Date(event.start);
   const end = new Date(event.end);
@@ -63,18 +50,19 @@ function draftFromEvent(event) {
     date: dateInputValue(start),
     startTime: timeInputValue(event.start),
     endTime: timeInputValue(event.end),
+    endDate: dateKey(end),
     category: event.category || "personal",
     location: event.location || "",
     notes: event.notes || "",
   };
 }
 
-function EventForm({ draft, onChange, onClose, onSave, onDelete }) {
+function EventForm({ draft, onChange, onClose, onSave, onDelete, busy, error }) {
   const update = (field) => (event) => onChange({ ...draft, [field]: event.target.value });
   const submit = (event) => {
     event.preventDefault();
     const start = parseLocalDateTime(draft.date, draft.startTime);
-    const end = parseLocalDateTime(draft.date, draft.endTime);
+    const end = parseLocalDateTime(draft.endDate || draft.date, draft.endTime);
     if (end <= start) {
       window.alert("The end time must be after the start time.");
       return;
@@ -101,13 +89,17 @@ function EventForm({ draft, onChange, onClose, onSave, onDelete }) {
           <button className="ap-calendar__icon-button" type="button" onClick={onClose} aria-label="Close event form">×</button>
         </div>
         <form onSubmit={submit} className="ap-calendar__form">
+          {error && <p className="ap-calendar__field--wide" role="alert">{error}</p>}
           <label className="ap-calendar__field ap-calendar__field--wide">
             <span>Event name</span>
             <input autoFocus required maxLength={100} value={draft.title} onChange={update("title")} placeholder="e.g. ECON 250 lecture" />
           </label>
           <label className="ap-calendar__field">
             <span>Date</span>
-            <input required type="date" value={draft.date} onChange={update("date")} />
+            <input required type="date" value={draft.date} onChange={(event) => {
+              const date = event.target.value;
+              onChange({ ...draft, date, endDate: draft.endDate === draft.date ? date : draft.endDate });
+            }} />
           </label>
           <label className="ap-calendar__field">
             <span>Type</span>
@@ -118,6 +110,10 @@ function EventForm({ draft, onChange, onClose, onSave, onDelete }) {
           <label className="ap-calendar__field">
             <span>Starts</span>
             <input required type="time" value={draft.startTime} onChange={update("startTime")} />
+          </label>
+          <label className="ap-calendar__field">
+            <span>End date</span>
+            <input required type="date" min={draft.date} value={draft.endDate} onChange={update("endDate")} />
           </label>
           <label className="ap-calendar__field">
             <span>Ends</span>
@@ -132,10 +128,10 @@ function EventForm({ draft, onChange, onClose, onSave, onDelete }) {
             <textarea rows="3" maxLength={500} value={draft.notes} onChange={update("notes")} placeholder="Add a reminder or details" />
           </label>
           <div className="ap-calendar__form-actions ap-calendar__field--wide">
-            {draft.id && <button className="ap-calendar__button ap-calendar__button--danger" type="button" onClick={onDelete}>Delete</button>}
+            {draft.id && <button className="ap-calendar__button ap-calendar__button--danger" type="button" disabled={busy} onClick={onDelete}>Delete</button>}
             <span />
             <button className="ap-calendar__button ap-calendar__button--quiet" type="button" onClick={onClose}>Cancel</button>
-            <button className="ap-calendar__button ap-calendar__button--primary" type="submit">Save event</button>
+            <button className="ap-calendar__button ap-calendar__button--primary" type="submit" disabled={busy}>Save event</button>
           </div>
         </form>
       </section>
@@ -235,9 +231,26 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
   const fileInput = useRef(null);
 
   useEffect(() => {
-    try { window.localStorage.setItem(storageKey, JSON.stringify(events)); } catch { /* Storage can be disabled or full. */ }
-    onEventsChange?.(events);
-  }, [events, storageKey, onEventsChange]);
+    const controller = new AbortController();
+    const { signal } = controller;
+    scheduleRequest("/events", { signal }).then((rows) => {
+      if (signal.aborted) return;
+      setEvents(rows ?? []);
+      setReady(rows !== null);
+    }).catch((requestError) => {
+      if (!signal.aborted) setError(requestError.message);
+    });
+    scheduleRequest("/me", { signal }).then((rows) => {
+      if (!signal.aborted) setBlocks(rows);
+    }).catch((requestError) => {
+      if (!signal.aborted) setScheduleError(requestError.message);
+    });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (ready) onEventsChange?.(events);
+  }, [events, ready, onEventsChange]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -277,19 +290,38 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
     return () => controller.abort();
   }, [lobbyChoices]);
 
-  const calendarEvents = useMemo(() => [...events, ...lobbyEvents], [events, lobbyEvents]);
+  const weeklyEvents = useMemo(() => {
+    const firstDay = view === "week" ? startOfWeek(activeDate)
+      : startOfWeek(new Date(activeDate.getFullYear(), activeDate.getMonth(), 1));
+    return Array.from({ length: view === "week" ? 7 : 42 }, (_, offset) => {
+      const day = addDays(firstDay, offset);
+      const date = dateKey(day);
+      return (blocks ?? []).filter((block) => block.day_of_week === (day.getDay() + 6) % 7).map((block) => ({
+        id: `weekly-${block.id}-${date}`, title: block.label || "Schedule block",
+        start: `${date}T${block.start_time.slice(0, 8)}`,
+        end: `${date}T${block.end_time.slice(0, 8)}`, category: "class", source: "weekly", block,
+      }));
+    }).flat();
+  }, [activeDate, blocks, view]);
+  const calendarEvents = useMemo(
+    () => [...events, ...lobbyEvents, ...weeklyEvents], [events, lobbyEvents, weeklyEvents],
+  );
   const filteredEvents = useMemo(
     () => sortEvents(calendarEvents.filter((event) => enabledCategories.has(event.category))),
     [calendarEvents, enabledCategories],
   );
   const eventsByDay = useMemo(() => {
     const grouped = new Map();
-    for (const event of filteredEvents) {
-      const key = dateKey(new Date(event.start));
-      grouped.set(key, [...(grouped.get(key) || []), event]);
+    const first = view === "week" ? startOfWeek(activeDate)
+      : startOfWeek(new Date(activeDate.getFullYear(), activeDate.getMonth(), 1));
+    for (let offset = 0; offset < (view === "week" ? 7 : 42); offset++) {
+      const day = addDays(first, offset);
+      grouped.set(dateKey(day), filteredEvents.filter((event) =>
+        new Date(event.start) < addDays(day, 1) && new Date(event.end) > day
+      ));
     }
     return grouped;
-  }, [filteredEvents]);
+  }, [filteredEvents, activeDate, view]);
 
   const label = view === "month"
     ? monthFormatter.format(activeDate)
@@ -300,29 +332,113 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
       ? new Date(current.getFullYear(), current.getMonth() + direction, 1)
       : addDays(current, direction * 7));
   };
-  const openNewEvent = (date = activeDate) => {
+  const openNewEvent = (date = activeDate, blockTime = false) => {
+    if (!blocks || busy) return;
     setActiveDate(date);
-    setDraft(emptyDraft(date));
+    setEditingBlock(null);
+    setAllowBusyLabel(blockTime);
+    setBlockError("");
+    setBlockFormOpen(true);
   };
   function openEvent(event) {
-    if (event.source === "lobby") {
+    if (event.source === "weekly") {
+      if (busy) return;
+      setActiveDate(new Date(event.start));
+      setEditingBlock(event.block);
+      setAllowBusyLabel(event.block.label === "Busy");
+      setBlockError("");
+      setBlockFormOpen(true);
+    } else if (event.source) {
       setSelectedLobby(event);
     } else {
+      if (!ready || busy) return;
+      setError("");
       setSelectedLobby(null);
       setDraft(draftFromEvent(event));
     }
   }
-  const saveEvent = (event) => {
-    setEvents((current) => sortEvents(event.id && current.some((item) => item.id === event.id)
-      ? current.map((item) => item.id === event.id ? event : item)
-      : [...current, event]));
-    setDraft(null);
-  };
-  const deleteEvent = () => {
-    if (!draft?.id) return;
-    setEvents((current) => current.filter((event) => event.id !== draft.id));
-    setDraft(null);
-  };
+  async function runCalendarAction(action) {
+    if (!ready || busy) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await action();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveTimeBlock(event) {
+    event.preventDefault();
+    if (busy || !blocks) return;
+    const fields = new FormData(event.currentTarget);
+    const dayOfWeek = Number(fields.get("weekday"));
+    const start = fields.get("start");
+    const end = fields.get("end");
+    if (end <= start) {
+      setBlockError("Choose an end time after the start time.");
+      return;
+    }
+
+    setBusy(true);
+    setBlockError("");
+    setNotice("");
+    try {
+      const block = await scheduleRequest("/", {
+        method: "POST",
+        body: {
+          day_of_week: dayOfWeek,
+          start_time: start,
+          end_time: end,
+          label: fields.get("label").trim() || "Busy",
+        },
+      });
+      setBlocks((current) => [...current.filter(({ id }) => id !== block.id), block]);
+      setActiveDate(addDays(startOfWeek(activeDate), dayOfWeek));
+      setEnabledCategories((current) => new Set([...current, "class"]));
+      setBlockFormOpen(false);
+      setNotice("Weekly time block saved.");
+    } catch (requestError) {
+      setBlockError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function saveEvent(event) {
+    return runCalendarAction(async () => {
+      if (draft.id) {
+        const saved = await scheduleRequest(`/events/${encodeURIComponent(event.id)}`, { method: "PUT", body: event });
+        setEvents((current) => current.map((item) => item.id === saved.id ? saved : item));
+      } else {
+        setEvents(await scheduleRequest("/events", { method: "POST", body: [event] }));
+      }
+      setActiveDate(new Date(event.start));
+      setDraft(null);
+    });
+  }
+
+  function deleteEvent() {
+    return runCalendarAction(async () => {
+      const { id } = draft;
+      await scheduleRequest(`/events/${encodeURIComponent(id)}`, { method: "DELETE" });
+      setEvents((current) => current.filter((event) => event.id !== id));
+      setDraft(null);
+    });
+  }
+
+  async function uploadEvents(added) {
+    if (!added.length) throw new Error("No calendar events were found.");
+    if (added.length > 1000) throw new Error("Import a file with 1,000 events or fewer.");
+    setEvents(await scheduleRequest("/events", { method: "POST", body: added }));
+    const focus = added.find((event) => new Date(event.end) > new Date()) || added[0];
+    setActiveDate(new Date(focus.start));
+    setEnabledCategories(new Set(CALENDAR_CATEGORIES.map(({ id }) => id)));
+  }
+
   const toggleCategory = (id) => {
     setEnabledCategories((current) => {
       const next = new Set(current);
@@ -342,19 +458,24 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
     URL.revokeObjectURL(url);
   };
 
-  const importCalendar = async (event) => {
-    const file = event.target.files?.[0];
+  function importCalendar(event) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = "";
     if (!file) return;
-    try {
-      const added = importIcs(await file.text());
-      if (added.length) setEvents((current) => sortEvents([...current, ...added]));
-      else window.alert("No calendar events were found in this file.");
-    } catch {
-      window.alert("This calendar file could not be read.");
-    } finally {
-      event.target.value = "";
-    }
-  };
+    return runCalendarAction(async () => {
+      await uploadEvents(importIcs(await file.text()));
+      setNotice("Calendar file imported.");
+    });
+  }
+
+  function copyBrowserEvents() {
+    return runCalendarAction(async () => {
+      await uploadEvents(legacyEvents);
+      setLegacyEvents([]);
+      setNotice("Browser events copied to your account.");
+    });
+  }
 
   return (
     <div className={`ap-calendar ${className}`.trim()}>
@@ -366,15 +487,31 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
         </div>
         <div className="ap-calendar__top-actions">
           <input ref={fileInput} className="ap-calendar__file-input" type="file" accept=".ics,text/calendar" onChange={importCalendar} aria-label="Import calendar file" />
-          <button className="ap-calendar__button ap-calendar__button--quiet" type="button" onClick={() => fileInput.current?.click()}>Import .ics</button>
+          <button className="ap-calendar__button ap-calendar__button--quiet" type="button" disabled={!ready || busy} onClick={() => fileInput.current?.click()}>Import .ics</button>
           <button className="ap-calendar__button ap-calendar__button--quiet" type="button" onClick={downloadCalendar}>Export .ics</button>
-          <button className="ap-calendar__button ap-calendar__button--primary" type="button" onClick={() => openNewEvent()}>＋ Add event</button>
+          <button className="ap-calendar__button ap-calendar__button--primary" type="button" disabled={!blocks || busy} onClick={() => openNewEvent()}>＋ Add event</button>
         </div>
       </header>
 
+      {ready === null && !error && <p role="status">Loading calendar…</p>}
+      {!draft && error && <p role="alert">{error}</p>}
+      {notice && <p role="status">{notice}</p>}
+      {scheduleError && <p role="alert">Weekly schedule could not load. {scheduleError}</p>}
+      {ready && legacyEvents.length > 0 && (
+        <button className="ap-calendar__button" type="button" disabled={busy} onClick={copyBrowserEvents}>
+          Copy saved browser events to this account
+        </button>
+      )}
       <div className="ap-calendar__layout">
         <aside className="ap-calendar__sidebar" aria-label="Calendar filters">
-          <button className="ap-calendar__button ap-calendar__button--primary ap-calendar__sidebar-add" type="button" onClick={() => openNewEvent()}>＋ New event</button>
+          <button className="ap-calendar__button ap-calendar__button--primary ap-calendar__sidebar-add" type="button" disabled={!ready || busy} onClick={() => openNewEvent()}>＋ New event</button>
+          <button className="ap-calendar__button ap-calendar__sidebar-add" type="button"
+            disabled={!blocks || busy} onClick={() => {
+              setBlockError("");
+              setBlockFormOpen(true);
+            }}>
+            Block time
+          </button>
           <section className="ap-calendar__filters">
             <div className="ap-calendar__section-heading">
               <h2>My calendars</h2>
@@ -424,11 +561,56 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
               <button className="ap-calendar__button" type="button" onClick={() => setSelectedLobby(null)}>Close details</button>
             </section>
           )}
-          <p className="ap-calendar__privacy">Personal events are saved in this browser. Joined lobbies sync from your account.</p>
+          <p className="ap-calendar__privacy">Calendar events and joined lobbies sync from your account.</p>
         </section>
       </div>
 
-      {draft && <EventForm draft={draft} onChange={setDraft} onClose={() => setDraft(null)} onSave={saveEvent} onDelete={deleteEvent} />}
+      {blockFormOpen && (
+        <div className="ap-calendar__backdrop">
+          <section className="ap-calendar__dialog" role="dialog" aria-modal="true" aria-labelledby="ap-calendar-block-title">
+            <div className="ap-calendar__dialog-head">
+              <div>
+                <h2 id="ap-calendar-block-title">Block time</h2>
+                <p>Repeats every week on the selected day.</p>
+              </div>
+              <button className="ap-calendar__icon-button" type="button" disabled={busy}
+                aria-label="Close time block form" onClick={() => setBlockFormOpen(false)}>×</button>
+            </div>
+            <form className="ap-calendar__form" onSubmit={saveTimeBlock}>
+              <label className="ap-calendar__field ap-calendar__field--wide">
+                <span>Day of the week</span>
+                <select name="weekday" defaultValue={(activeDate.getDay() + 6) % 7} autoFocus>
+                  {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day, index) => (
+                    <option key={day} value={index}>{day}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="ap-calendar__field">
+                <span>Starts</span>
+                <input name="start" type="time" defaultValue="09:00" required />
+              </label>
+              <label className="ap-calendar__field">
+                <span>Ends</span>
+                <input name="end" type="time" defaultValue="10:00" required />
+              </label>
+              <label className="ap-calendar__field ap-calendar__field--wide">
+                <span>Label <small>Optional</small></span>
+                <input name="label" placeholder="Busy" maxLength={100} />
+              </label>
+              {blockError && <p className="ap-calendar__field--wide" role="alert">{blockError}</p>}
+              <div className="ap-calendar__form-actions ap-calendar__field--wide">
+                <span />
+                <button className="ap-calendar__button ap-calendar__button--quiet" type="button"
+                  disabled={busy} onClick={() => setBlockFormOpen(false)}>Cancel</button>
+                <button className="ap-calendar__button ap-calendar__button--primary" type="submit" disabled={busy}>
+                  {busy ? "Saving…" : "Save time block"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+      {draft && <EventForm busy={busy} error={error} draft={draft} onChange={setDraft} onClose={() => { if (!busy) { setDraft(null); setError(""); } }} onSave={saveEvent} onDelete={deleteEvent} />}
     </div>
   );
 }

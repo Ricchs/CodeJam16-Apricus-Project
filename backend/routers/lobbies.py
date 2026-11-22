@@ -6,10 +6,11 @@ import models
 from database import get_db
 from deps import get_current_user_id
 from fastapi import APIRouter, Depends, HTTPException
-from schemas.lobby import LobbyCreate, LobbyOut
+from schemas.lobby import LobbyCreate, LobbyOut, LobbyDetail, MemberOut
 from services.matching import MONTREAL, TimeBlock, rank_lobbies
 from services.matching import Lobby as MatchLobby
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 router = APIRouter()
 
@@ -71,7 +72,6 @@ def get_lobbies_deck(
         for row in schedule_blocks
     ]
 
-
     members_by_lobby = defaultdict(lambda: defaultdict(set))
     for lobby_id, member_id, interest_id in member_interests:
         members = members_by_lobby[lobby_id]
@@ -86,7 +86,7 @@ def get_lobbies_deck(
             start_time=lobby.starts_at,
             end_time=lobby.ends_at,
             capacity=lobby.capacity,
-            member_interests=list(members_by_lobby[lobby.id].values())
+            member_interests=list(members_by_lobby[lobby.id].values()),
         )
         for lobby in lobbies
     ]
@@ -95,6 +95,47 @@ def get_lobbies_deck(
 
     lobbies_by_id = {lobby.id: lobby for lobby in lobbies}
     return [lobbies_by_id[m.id] for m in ranked]
+
+
+@router.get("/lobbies/{lobby_id}", response_model=LobbyDetail)
+def get_lobby(
+    lobby_id: UUID,
+    db: Session = Depends(get_db),
+    user_id: UUID = Depends(get_current_user_id),
+):
+    lobby = db.get(models.Lobby, lobby_id)
+    if lobby is None:
+        raise HTTPException(status_code=404, detail="Lobby not found")
+
+    member_ids = db.query(models.LobbyMember.user_id).filter(
+        models.LobbyMember.lobby_id == lobby_id
+    )
+    members = db.query(models.User).filter(models.User.id.in_(member_ids)).all()
+
+    return LobbyDetail(
+        **LobbyOut.model_validate(lobby).model_dump(),
+        members=[MemberOut.model_validate(m) for m in members],
+    )
+
+
+@router.get("/lobbies/mine", response_model=list[LobbyOut])
+def get_my_lobbies(
+    db: Session = Depends(get_db), user_id: UUID = Depends(get_current_user_id)
+):
+    joined_ids = db.query(models.LobbyMember.lobby_id).filter(
+        models.LobbyMember.user_id == user_id
+    )
+    return (
+        db.query(models.Lobby)
+        .filter(
+            or_(
+                models.Lobby.host_id == user_id,
+                models.Lobby.id.in_(joined_ids),
+            )
+        )
+        .order_by(models.Lobby.starts_at)
+        .all()
+    )
 
 
 @router.post("/lobbies", response_model=LobbyOut)
@@ -140,8 +181,13 @@ def join_lobby(
     if lobby.starts_at <= datetime.now(MONTREAL):
         raise HTTPException(status_code=409, detail="This lobby has already started.")
     if db.get(models.User, user_id) is None:
-        raise HTTPException(status_code=403, detail="Create your Apricus profile before joining.")
-    if db.query(models.LobbyMember).filter_by(lobby_id=lobby_id).count() >= lobby.capacity:
+        raise HTTPException(
+            status_code=403, detail="Create your Apricus profile before joining."
+        )
+    if (
+        db.query(models.LobbyMember).filter_by(lobby_id=lobby_id).count()
+        >= lobby.capacity
+    ):
         raise HTTPException(status_code=409, detail="This lobby is full.")
 
     db.add(models.LobbyMember(lobby_id=lobby_id, user_id=user_id))
