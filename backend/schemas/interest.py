@@ -1,6 +1,4 @@
-from datetime import datetime, time
-from uuid import UUID
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 class InterestOut(BaseModel):
     id: int
