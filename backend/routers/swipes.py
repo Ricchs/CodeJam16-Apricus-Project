@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 import models
@@ -5,6 +6,7 @@ from database import get_db
 from deps import get_current_user_id
 from fastapi import APIRouter, Depends, HTTPException
 from schemas.swipe import SwipeCreate, SwipeOut
+from services.matching import MONTREAL
 from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
@@ -26,22 +28,14 @@ def get_swipes(
     return [SwipeCreate(lobby_id=row.lobby_id, liked=row.liked) for row in rows]
 
 
-@router.get("/swipes", response_model=list[SwipeCreate])
-def get_my_swipes(
-    db: Session = Depends(get_db),
-    user_id: UUID = Depends(get_current_user_id),
-):
-    swipes = db.query(models.Swipe).filter(models.Swipe.user_id == user_id).all()
-    return [{"lobby_id": s.lobby_id, "liked": s.liked} for s in swipes]
-
-
 @router.post("/swipes", response_model=SwipeOut)
 def create_swipes(
     body: SwipeCreate,
     db: Session = Depends(get_db),
     user_id: UUID = Depends(get_current_user_id),
 ):
-    if db.get(models.Lobby, body.lobby_id) is None:
+    lobby = db.get(models.Lobby, body.lobby_id)
+    if lobby is None:
         raise HTTPException(status_code=404, detail="Lobby not found")
 
     statement = insert(models.Swipe).values(
@@ -54,6 +48,26 @@ def create_swipes(
             where=models.Swipe.liked.is_distinct_from(statement.excluded.liked),
         )
     )
-    joined = db.get(models.LobbyMember, (body.lobby_id, user_id)) is not None
+
+    membership = db.get(models.LobbyMember, (body.lobby_id, user_id))
+    joined = membership is not None
+
+    if body.liked and not joined:
+        num_members = (
+            db.query(models.LobbyMember)
+            .filter(models.LobbyMember.lobby_id == lobby.id)
+            .count()
+        )
+        if (
+            lobby.starts_at > datetime.now(MONTREAL)
+            and lobby.host_id != user_id
+            and num_members < lobby.capacity
+        ):
+            db.add(models.LobbyMember(lobby_id=lobby.id, user_id=user_id))
+            joined = True
+    elif not body.liked and joined:
+        db.delete(membership)
+        joined = False
+
     db.commit()
     return SwipeOut(lobby_id=body.lobby_id, liked=body.liked, joined=joined)
