@@ -26,6 +26,15 @@ def get_swipes(
     return [SwipeCreate(lobby_id=row.lobby_id, liked=row.liked) for row in rows]
 
 
+@router.get("/swipes", response_model=list[SwipeCreate])
+def get_my_swipes(
+    db: Session = Depends(get_db),
+    user_id: UUID = Depends(get_current_user_id),
+):
+    swipes = db.query(models.Swipe).filter(models.Swipe.user_id == user_id).all()
+    return [{"lobby_id": s.lobby_id, "liked": s.liked} for s in swipes]
+
+
 @router.post("/swipes", response_model=SwipeOut)
 def create_swipes(
     body: SwipeCreate,
