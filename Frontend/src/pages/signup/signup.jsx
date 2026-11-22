@@ -1,11 +1,61 @@
 import React, { useState } from "react";
+import { ensureUserProfile } from "../../userProfile.js";
+import { supabase } from "../../../supabase.js";
 
 export default function SignupPage({ onShowLogin, onShowLanding }) {
   const [message, setMessage] = useState("");
 
-  function handleSignup(event) {
+  const [pending, setPending] = useState(false);
+
+  async function handleSignup(event) {
     event.preventDefault();
-    setMessage("Signup form submitted. Supabase is not connected yet.");
+    if (pending) return;
+    if (!supabase) {
+      setMessage("Supabase is not configured.");
+      return;
+    }
+
+    const form = event.currentTarget;
+    const fields = new FormData(form);
+    const profile = Object.fromEntries(
+      ["first_name", "last_name", "mcgill_id", "faculty", "major", "year_of_study", "role"]
+        .map((name) => [name, String(fields.get(name) ?? "").trim()])
+    );
+    if (Object.values(profile).some((value) => !value)) {
+      setMessage("Complete all profile fields.");
+      return;
+    }
+    const { role, ...details } = profile;
+
+    setPending(true);
+    setMessage("");
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: String(fields.get("email")).trim(),
+        password: String(fields.get("password")),
+        options: { data: { ...details, requested_role: role } },
+      });
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+      if (data.session) {
+        try {
+          await ensureUserProfile(data.session);
+        } catch (profileError) {
+          setMessage(`Your account was created. ${profileError.message} Log in to retry profile setup.`);
+          return;
+        }
+      }
+      form.reset();
+      setMessage(data.session
+        ? "Account ready. Select Back to log in to continue."
+        : "If confirmation is required, check your email for a link before logging in.");
+    } catch {
+      setMessage("Could not connect to Supabase. Try again.");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -44,20 +94,12 @@ export default function SignupPage({ onShowLogin, onShowLanding }) {
 
           <label>
             Major
-            <select name="faculty" defaultValue="" required>
-              <option value="" disabled hidden>Choose a Major</option>
-              <option value="Engineering">Engineering</option>
-              <option value="Science">Science</option>
-              <option value="Medicine">Medicine</option>
-              <option value="Business">Business</option>
-              <option value="Law">Law</option>
-              <option value="Arts">Arts</option>
-            </select>
+            <input name="major" placeholder="e.g. Computer Engineering" required />
           </label>
 
           <label>
             Year of study
-            <select name="year of study" defaultValue="" required>
+            <select name="year_of_study" defaultValue="" required>
               <option value="" disabled hidden>Select year of study</option>
               <option value="U0">U0</option>
               <option value="U1">U1</option>
@@ -74,7 +116,7 @@ export default function SignupPage({ onShowLogin, onShowLanding }) {
             <select name="role" defaultValue="" required>
               <option value="" disabled hidden>Select a role</option>
               <option value="Student">Student</option>
-              <option value="Faculty">Clubs</option>
+              <option value="Clubs">Clubs</option>
             </select>
           </label>
 
@@ -93,7 +135,9 @@ export default function SignupPage({ onShowLogin, onShowLanding }) {
             />
           </label>
 
-          <button className="primary" type="submit">Create account</button>
+          <button className="primary" type="submit" disabled={pending}>
+            {pending ? "Creating account…" : "Create account"}
+          </button>
         </form>
 
         <p role="status">{message}</p>
