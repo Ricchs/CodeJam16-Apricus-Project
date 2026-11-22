@@ -10,7 +10,7 @@ from schemas.lobby import LobbyCreate, LobbyOut, LobbyDetail, MemberOut
 from services.matching import MONTREAL, TimeBlock, rank_lobbies
 from services.matching import Lobby as MatchLobby
 from sqlalchemy.orm import Session
-from sqlalchmy import or_
+from sqlalchemy import or_
 
 router = APIRouter()
 
