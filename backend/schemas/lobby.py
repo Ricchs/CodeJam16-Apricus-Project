@@ -17,3 +17,14 @@ class LobbyOut(LobbyCreate):
     host_id: UUID
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class MemberOut(BaseModel):
+    id: UUID
+    display_name: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LobbyDetail(LobbyOut):
+    members: list[MemberOut]
