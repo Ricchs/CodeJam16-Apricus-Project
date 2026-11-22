@@ -240,7 +240,9 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [blocks, setBlocks] = useState([]);
+  const [blocks, setBlocks] = useState(null);
+  const [blockFormOpen, setBlockFormOpen] = useState(false);
+  const [blockError, setBlockError] = useState("");
   const [scheduleError, setScheduleError] = useState("");
   const [activeDate, setActiveDate] = useState(() => new Date());
   const [view, setView] = useState("week");
@@ -307,7 +309,7 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
     return Array.from({ length: view === "week" ? 7 : 42 }, (_, offset) => {
       const day = addDays(firstDay, offset);
       const date = dateKey(day);
-      return blocks.filter((block) => block.day_of_week === (day.getDay() + 6) % 7).map((block) => ({
+      return (blocks ?? []).filter((block) => block.day_of_week === (day.getDay() + 6) % 7).map((block) => ({
         id: `weekly-${block.id}-${date}`, title: block.label || "Schedule block",
         start: `${date}T${block.start_time.slice(0, 8)}`,
         end: `${date}T${block.end_time.slice(0, 8)}`, category: "class", source: "weekly",
@@ -368,6 +370,43 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
       await action();
     } catch (requestError) {
       setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveTimeBlock(event) {
+    event.preventDefault();
+    if (busy || !blocks) return;
+    const fields = new FormData(event.currentTarget);
+    const dayOfWeek = Number(fields.get("weekday"));
+    const start = fields.get("start");
+    const end = fields.get("end");
+    if (end <= start) {
+      setBlockError("Choose an end time after the start time.");
+      return;
+    }
+
+    setBusy(true);
+    setBlockError("");
+    setNotice("");
+    try {
+      const block = await scheduleRequest("/", {
+        method: "POST",
+        body: {
+          day_of_week: dayOfWeek,
+          start_time: start,
+          end_time: end,
+          label: fields.get("label").trim() || "Busy",
+        },
+      });
+      setBlocks((current) => [...current.filter(({ id }) => id !== block.id), block]);
+      setActiveDate(addDays(startOfWeek(activeDate), dayOfWeek));
+      setEnabledCategories((current) => new Set([...current, "class"]));
+      setBlockFormOpen(false);
+      setNotice("Weekly time block saved.");
+    } catch (requestError) {
+      setBlockError(requestError.message);
     } finally {
       setBusy(false);
     }
@@ -470,6 +509,13 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
       <div className="ap-calendar__layout">
         <aside className="ap-calendar__sidebar" aria-label="Calendar filters">
           <button className="ap-calendar__button ap-calendar__button--primary ap-calendar__sidebar-add" type="button" disabled={!ready || busy} onClick={() => openNewEvent()}>＋ New event</button>
+          <button className="ap-calendar__button ap-calendar__sidebar-add" type="button"
+            disabled={!blocks || busy} onClick={() => {
+              setBlockError("");
+              setBlockFormOpen(true);
+            }}>
+            Block time
+          </button>
           <section className="ap-calendar__filters">
             <div className="ap-calendar__section-heading">
               <h2>My calendars</h2>
@@ -523,6 +569,51 @@ export default function Calendar({ initialEvents = [], storageKey = STORAGE_KEY,
         </section>
       </div>
 
+      {blockFormOpen && (
+        <div className="ap-calendar__backdrop">
+          <section className="ap-calendar__dialog" role="dialog" aria-modal="true" aria-labelledby="ap-calendar-block-title">
+            <div className="ap-calendar__dialog-head">
+              <div>
+                <h2 id="ap-calendar-block-title">Block time</h2>
+                <p>Repeats every week on the selected day.</p>
+              </div>
+              <button className="ap-calendar__icon-button" type="button" disabled={busy}
+                aria-label="Close time block form" onClick={() => setBlockFormOpen(false)}>×</button>
+            </div>
+            <form className="ap-calendar__form" onSubmit={saveTimeBlock}>
+              <label className="ap-calendar__field ap-calendar__field--wide">
+                <span>Day of the week</span>
+                <select name="weekday" defaultValue={(activeDate.getDay() + 6) % 7} autoFocus>
+                  {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day, index) => (
+                    <option key={day} value={index}>{day}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="ap-calendar__field">
+                <span>Starts</span>
+                <input name="start" type="time" defaultValue="09:00" required />
+              </label>
+              <label className="ap-calendar__field">
+                <span>Ends</span>
+                <input name="end" type="time" defaultValue="10:00" required />
+              </label>
+              <label className="ap-calendar__field ap-calendar__field--wide">
+                <span>Label <small>Optional</small></span>
+                <input name="label" placeholder="Busy" maxLength={100} />
+              </label>
+              {blockError && <p className="ap-calendar__field--wide" role="alert">{blockError}</p>}
+              <div className="ap-calendar__form-actions ap-calendar__field--wide">
+                <span />
+                <button className="ap-calendar__button ap-calendar__button--quiet" type="button"
+                  disabled={busy} onClick={() => setBlockFormOpen(false)}>Cancel</button>
+                <button className="ap-calendar__button ap-calendar__button--primary" type="submit" disabled={busy}>
+                  {busy ? "Saving…" : "Save time block"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
       {draft && <EventForm busy={busy} error={error} draft={draft} onChange={setDraft} onClose={() => { if (!busy) { setDraft(null); setError(""); } }} onSave={saveEvent} onDelete={deleteEvent} />}
     </div>
   );
