@@ -1,7 +1,10 @@
 import React, { useState } from "react";
+import AccountTypePicker from "../AccountTypePicker.jsx";
 import { ensureUserProfile } from "../../userProfile.js";
 import { supabase } from "../../../supabase.js";
 export default function LoginPage({ onShowSignup, onShowLanding, onLogin }) {
+  const [accountType, setAccountType] = useState(null);
+  const isClub = accountType === "Clubs";
   const [message, setMessage] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
@@ -56,34 +59,41 @@ export default function LoginPage({ onShowSignup, onShowLanding, onLogin }) {
   return (
     <main className="login-screen">
       <section className="login-panel">
-        <h1>Log in to Apricus</h1>
+        <h1>{accountType ? (isClub ? "Club login" : "Student login") : "Log in to Apricus"}</h1>
+        {accountType ? (
+          <>
+            <form onSubmit={handleLogin}>
+              <label>
+                {isClub ? "Club email" : "McGill email"}
+                <input name="email" type="email" autoComplete="username" required />
+              </label>
+              <label>
+                Password
+                <input name="password" type="password" autoComplete="current-password" required />
+              </label>
+              <button className="primary" type="submit" disabled={isLoggingIn}>
+                {isLoggingIn ? "Logging in…" : "Log in"}
+              </button>
+            </form>
+            <p role="status">{message}</p>
+            <button className="outline" type="button" disabled={isLoggingIn}
+              onClick={() => onShowSignup(accountType)}>
+              {isClub ? "Register a club" : "Create a student account"}
+            </button>
+            <button className="outline" type="button" disabled={isLoggingIn} onClick={() => {
+              setAccountType(null);
+              setMessage("");
+            }}>
+              Change account type
+            </button>
+          </>
+        ) : (
+          <>
+            <p>Are you a student or a club?</p>
+            <AccountTypePicker onChoose={setAccountType} />
+          </>
+        )}
 
-        <form onSubmit={handleLogin}>
-          <label>
-            McGill email
-            <input name="email" type="email" autoComplete="username" required />
-          </label>
-
-          <label>
-            Password
-            <input
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-            />
-          </label>
-
-          <button className="primary" type="submit" disabled={isLoggingIn}>
-            {isLoggingIn ? "Logging in…" : "Log in"}
-          </button>
-        </form>
-
-        <p role="status">{message}</p>
-
-        <button className="outline" type="button" onClick={onShowSignup}>
-          Create an account
-        </button>
         <button className="outline" type="button" onClick={onShowLanding}>
           Back to home
         </button>

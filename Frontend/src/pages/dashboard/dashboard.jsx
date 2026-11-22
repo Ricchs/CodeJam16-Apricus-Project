@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { CalendarDays, Compass, Settings, Users } from "lucide-react";
 import CalendarPage from "../calendar/Calendar.jsx";
 import LobbyPage from "../lobby/lobby.jsx";
 import LobbySwipeDeck from "../lobby/LobbySwpieCard.jsx";
-import { getInterests, getLobbies, getLobbyDeck, getSwipes, saveSwipe } from "../lobby/lobbyApi.js";
+import { getInterests, getLobbies, getLobbyDeck, getMyLobbies, getSwipes, saveSwipe } from "../lobby/lobbyApi.js";
 import SettingsPage from "../settings/usr_settings.jsx";
 import "./dashboard.css";
 
@@ -14,19 +14,19 @@ const tabs = [
   { id: "settings", label: "Account settings", Icon: Settings },
 ];
 
-function Discover({ onShowLobbies, choices, onChoose, selectedInterestId }) {
+function Discover({ onShowLobbies, choices, onChoose, myLobbies, userId }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
-  const [refreshingDeck, setRefreshingDeck] = useState(false);
-  const [deckError, setDeckError] = useState("");
-  const selectedActivity = useRef(selectedInterestId);
+  const [selectedInterestId, setSelectedInterestId] = useState(undefined);
+  const [deckResult, setDeckResult] = useState(null);
+  const [deckAttempt, setDeckAttempt] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
-    Promise.all([getLobbyDeck(signal, selectedActivity.current), getLobbies(signal), getInterests(signal)])
-      .then(([deck, lobbies, interests]) => {
-        if (!signal.aborted) setData({ deck, lobbies, interests });
+    Promise.all([getLobbies(signal), getInterests(signal)])
+      .then(([lobbies, interests]) => {
+        if (!signal.aborted) setData({ lobbies, interests });
       })
       .catch((error) => {
         if (!signal.aborted) setError(error.message);
@@ -34,50 +34,89 @@ function Discover({ onShowLobbies, choices, onChoose, selectedInterestId }) {
     return () => controller.abort();
   }, []);
 
-  async function refreshDeck() {
-    setRefreshingDeck(true);
-    setDeckError("");
-    try {
-      const interestId = selectedActivity.current;
-      const deck = await getLobbyDeck(undefined, interestId);
-      setData((current) => ({ ...current, deck }));
-    } catch (error) {
-      setDeckError(error.message);
-    } finally {
-      setRefreshingDeck(false);
+  useEffect(() => {
+    if (selectedInterestId === undefined || !data) return;
+    const controller = new AbortController();
+    const { signal } = controller;
+    const request = { interestId: selectedInterestId, choices, attempt: deckAttempt };
+    const selectedInterest = data.interests.find(({ id }) => id === selectedInterestId);
+    const interestIds = selectedInterest ? data.interests
+      .filter(({ interest }) => interest.trim().toLowerCase() === selectedInterest.interest.trim().toLowerCase())
+      .map(({ id }) => id) : [];
+    getLobbyDeck(signal, interestIds, { includeOtherActivities: true })
+      .then((deck) => {
+        if (!signal.aborted) setDeckResult({ ...request, deck });
+      })
+      .catch((error) => {
+        if (!signal.aborted) setDeckResult({ ...request, error: error.message });
+      });
+    return () => controller.abort();
+  }, [selectedInterestId, choices, data, deckAttempt]);
+
+  const activeDeck = deckResult && deckResult.interestId === selectedInterestId
+    && deckResult.choices === choices && deckResult.attempt === deckAttempt
+    ? deckResult
+    : null;
+  const activitiesById = new Map(data?.interests.map(({ id, interest }) => [
+    id, interest.trim().toLowerCase(),
+  ]));
+  const activities = new Map();
+  for (const [id, name] of activitiesById) {
+    if (name && !activities.has(name)) {
+      activities.set(name, { id, label: name.charAt(0).toUpperCase() + name.slice(1) });
     }
   }
-
-  async function chooseAndRefresh(lobby, liked) {
-    await onChoose(lobby, liked);
-    if (liked) selectedActivity.current = lobby.interest_id;
-    else if (choices[lobby.id] === true) selectedActivity.current = null;
-    await refreshDeck();
-  }
+  const selectedActivity = activities.get(activitiesById.get(selectedInterestId));
+  const activityOptions = [...activities.values()];
 
   return (
     <section className="ap-dashboard__discover">
       <h1>Discover</h1>
       {error && <p role="alert">{error}</p>}
       {!data && !error && <p role="status">Loading activities…</p>}
-      {data && <LobbySwipeDeck {...data}
-        choices={choices} onChoose={chooseAndRefresh} refreshing={refreshingDeck}
-        deckError={deckError} onRetry={refreshDeck} selectedInterestId={selectedInterestId} />}
-      <div className="ap-dashboard__actions">
+      {data && selectedInterestId === undefined && (
+        <section className="ap-dashboard__card" aria-labelledby="discover-activity">
+          <h2 id="discover-activity">What are you interested in?</h2>
+          <div className="ap-dashboard__actions ap-dashboard__activity-picker">
+            {[{ id: null, label: "All activities" }, ...activityOptions].map(({ id, label }) => (
+              <button key={id ?? "all"} type="button" onClick={() => {
+                setDeckResult(null);
+                setSelectedInterestId(id);
+              }}>{label}</button>
+            ))}
+          </div>
+        </section>
+      )}
+      {data && selectedInterestId !== undefined && (
+        <>
+          <div className="ap-dashboard__actions ap-dashboard__activity-selection">
+            <span><strong>{selectedActivity ? selectedActivity.label : "All activities"}</strong></span>
+            <button type="button" onClick={() => setSelectedInterestId(undefined)}>Change activity</button>
+          </div>
+          <LobbySwipeDeck {...data} deck={activeDeck?.deck ?? []} choices={choices} onChoose={onChoose}
+            preferredActivity={selectedActivity?.label} myLobbies={myLobbies} userId={userId}
+            refreshing={!activeDeck} deckError={activeDeck?.error}
+            onRetry={() => setDeckAttempt((attempt) => attempt + 1)} />
+        </>
+      )}
+      <div className="ap-dashboard__actions ap-dashboard__browse">
         <button type="button" onClick={onShowLobbies}>Browse lobbies</button>
       </div>
     </section>
   );
 }
 
-export default function Dashboard({ onLogin, onSignedOut }) {
+export default function Dashboard({ onLogin, onSignedOut, userId }) {
   const [tab, setTab] = useState("calendar");
   const [choices, setChoices] = useState({});
-  const [interestedLobbies, setInterestedLobbies] = useState([]);
+  const [myLobbies, setMyLobbies] = useState([]);
   const [loadingChoices, setLoadingChoices] = useState(true);
   const [choiceError, setChoiceError] = useState("");
   const [choiceAttempt, setChoiceAttempt] = useState(0);
-  const latestInterest = interestedLobbies.at(-1);
+  const joinedById = new Map(myLobbies.map((lobby) => [lobby.id, lobby]));
+  const latestInterest = Object.keys(choices).reverse()
+    .map((id) => choices[id] === true ? joinedById.get(id) : undefined)
+    .find(Boolean);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -85,15 +124,10 @@ export default function Dashboard({ onLogin, onSignedOut }) {
 
     async function loadChoices() {
       try {
-        const swipes = await getSwipes(signal);
+        const [swipes, lobbies] = await Promise.all([getSwipes(signal), getMyLobbies(signal)]);
         if (signal.aborted) return;
-        const liked = swipes.filter((swipe) => swipe.liked);
-        const lobbies = liked.length ? await getLobbies(signal) : [];
-        if (signal.aborted) return;
-
-        const byId = new Map(lobbies.map((lobby) => [lobby.id, lobby]));
         setChoices(Object.fromEntries(swipes.map((swipe) => [swipe.lobby_id, swipe.liked])));
-        setInterestedLobbies(liked.map((swipe) => byId.get(swipe.lobby_id)).filter(Boolean));
+        setMyLobbies(lobbies);
       } catch (error) {
         if (!signal.aborted) setChoiceError(error.message);
       } finally {
@@ -106,12 +140,24 @@ export default function Dashboard({ onLogin, onSignedOut }) {
   }, [choiceAttempt]);
 
   async function onChoose(lobby, liked) {
-    await saveSwipe(lobby.id, liked);
-    setChoices((current) => ({ ...current, [lobby.id]: liked }));
-    setInterestedLobbies((current) => {
-      const remaining = current.filter(({ id }) => id !== lobby.id);
-      return liked ? [...remaining, lobby] : remaining;
+    const saved = await saveSwipe(lobby.id, liked);
+    setChoices((current) => {
+      const next = { ...current };
+      delete next[saved.lobby_id];
+      next[saved.lobby_id] = saved.liked;
+      return next;
     });
+    if (lobby.host_id !== userId) {
+      setMyLobbies((current) => {
+        const remaining = current.filter(({ id }) => id !== saved.lobby_id);
+        return saved.joined ? [...remaining, lobby] : remaining;
+      });
+    }
+    return saved;
+  }
+
+  function onLobbyAdded(lobby) {
+    setMyLobbies((current) => [...current.filter(({ id }) => id !== lobby.id), lobby]);
   }
 
   const showCalendar = () => setTab("calendar");
@@ -144,11 +190,11 @@ export default function Dashboard({ onLogin, onSignedOut }) {
           </div>
         )}
         {tab === "calendar" && !loadingChoices
-          && <CalendarPage interestedLobbies={interestedLobbies} initialDate={latestInterest?.starts_at} />}
-        {tab === "lobbies" && <LobbyPage />}
+          && <CalendarPage interestedLobbies={myLobbies} initialDate={latestInterest?.starts_at} />}
+        {tab === "lobbies" && <LobbyPage onLobbyAdded={onLobbyAdded} />}
         {tab === "discover" && !loadingChoices && !choiceError
           && <Discover onShowLobbies={() => setTab("lobbies")}
-            choices={choices} onChoose={onChoose} selectedInterestId={latestInterest?.interest_id} />}
+            choices={choices} onChoose={onChoose} myLobbies={myLobbies} userId={userId} />}
         {tab === "settings" && (
           <SettingsPage onBack={showCalendar} onLogin={onLogin} onSignedOut={onSignedOut} />
         )}

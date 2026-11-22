@@ -118,7 +118,7 @@ def get_lobbies_deck(
     if preferred_interest_id is None and interest_ids:
         wanted = set(interest_ids)
         ranked = [lobby for lobby in ranked if lobby.interest_id in wanted]
-    elif ranked and preferred_interest_id is None:
+    elif ranked and preferred_interest_id is None and not include_other_activities:
         preferred_interest_id = (
             db.query(models.Lobby.interest_id)
             .join(models.Swipe, models.Swipe.lobby_id == models.Lobby.id)

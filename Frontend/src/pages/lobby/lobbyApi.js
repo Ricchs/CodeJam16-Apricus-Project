@@ -37,11 +37,17 @@ async function request(path, { body, signal, authenticated = false, allowSignedO
   return response.json();
 }
 
-export const getLobbies = (signal) => request("/lobbies", { signal });
-export const getLobbyDeck = (signal, interestId) => {
-  const query = interestId == null ? "" : `?${new URLSearchParams({ interest_id: interestId })}`;
+export const getLobbies = (signal) => request("/lobbies", { signal, authenticated: true });
+export const getLobbyDeck = (signal, interestIds = [], { includeOtherActivities = false } = {}) => {
+  const params = new URLSearchParams();
+  for (const id of interestIds) params.append("interest_ids", id);
+  if (includeOtherActivities) params.set("include_other_activities", "true");
+  const query = params.size ? `?${params}` : "";
   return request(`/lobbies/deck${query}`, { signal, authenticated: true, cache: "no-store" });
 };
+export const getMyLobbies = (signal, { allowSignedOut = false } = {}) =>
+  request("/lobbies/mine", { signal, authenticated: true, allowSignedOut, cache: "no-store" });
+
 export const getInterests = (signal) => request("/interests/", { signal });
 export const createLobby = (body) => request("/lobbies", { body, authenticated: true });
 

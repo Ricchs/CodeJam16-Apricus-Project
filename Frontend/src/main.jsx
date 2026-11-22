@@ -12,11 +12,14 @@ import "./style.css";
 
 function App() {
   const [page, setPage] = useState(supabase ? null : "home");
+  const [userId, setUserId] = useState(null);
+  const [signupType, setSignupType] = useState(null);
 
   useEffect(() => {
     if (!supabase) return;
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUserId(session?.user.id ?? null);
       if (event === "INITIAL_SESSION") {
         setPage(session ? "dashboard" : "home");
       } else if (event === "SIGNED_OUT") {
@@ -33,13 +36,16 @@ function App() {
 
   const showHome = () => setPage("home");
   const showLogin = () => setPage("login");
-  const showSignup = () => setPage("signup");
+  const showSignup = (type = null) => {
+    setSignupType(type);
+    setPage("signup");
+  };
 
   if (page === "home") {
     return (
       <LandingPage
         onShowLogin={showLogin}
-        onShowSignup={showSignup}
+        onShowSignup={() => showSignup()}
         onShowCalendar={() => setPage("calendar")}
         onShowLanding={showHome}
         onShowLobby={() => setPage("lobby")}
@@ -49,12 +55,12 @@ function App() {
 
   if (page === "signup") {
     return (
-      <SignupPage onShowLogin={showLogin} onShowLanding={showHome} />
+      <SignupPage initialAccountType={signupType} onShowLogin={showLogin} onShowLanding={showHome} />
     );
   }
 
   if (page === "dashboard") {
-    return <Dashboard onLogin={showLogin} onSignedOut={showHome} />;
+    return <Dashboard userId={userId} onLogin={showLogin} onSignedOut={showHome} />;
   }
 
   if (page === "calendar") {
@@ -86,7 +92,10 @@ function App() {
     <LoginPage
       onShowSignup={showSignup}
       onShowLanding={showHome}
-      onLogin={() => setPage("dashboard")}
+      onLogin={(session) => {
+        setUserId(session?.user.id ?? null);
+        setPage("dashboard");
+      }}
     />
   );
 }

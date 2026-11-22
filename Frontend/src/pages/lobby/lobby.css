@@ -1,6 +1,6 @@
 .ap-lobby {
-  --lobby-accent: #6257ce;
-  --lobby-line: #e4e2ef;
+  --lobby-accent: var(--brand-action);
+  --lobby-line: var(--page-line);
   display: grid;
   grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
   align-items: start;
@@ -8,23 +8,23 @@
   width: min(100%, 1140px);
   margin-inline: auto;
   padding: clamp(16px, 4vw, 48px);
-  color: #242638;
-  background: #f8f7fc;
+  color: var(--page-ink);
+  background: var(--page-bg);
   font-family: system-ui, sans-serif;
 }
 
 .ap-lobby, .ap-lobby * { box-sizing: border-box; }
 .ap-lobby > h1, .ap-lobby > p { grid-column: 1 / -1; margin: 0; }
 .ap-lobby > h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.1; }
-.ap-lobby > p, .ap-lobby article p { color: #59586c; }
+.ap-lobby > p, .ap-lobby article p { color: var(--page-muted); }
 
 .ap-lobby > section {
   min-width: 0;
   padding: clamp(16px, 3vw, 24px);
   background: #fff;
   border: 1px solid var(--lobby-line);
-  border-radius: 16px;
-  box-shadow: 0 8px 24px rgb(43 32 93 / 6%);
+  border-radius: 20px;
+  box-shadow: var(--page-shadow);
 }
 
 .ap-lobby h2 { margin: 0 0 16px; font-size: 1.25rem; }
@@ -55,7 +55,7 @@
   cursor: pointer;
 }
 
-.ap-lobby button:hover:not(:disabled) { background: #4e42b4; }
+.ap-lobby button:hover:not(:disabled) { background: var(--brand-action-hover); }
 .ap-lobby button:disabled { opacity: .55; cursor: not-allowed; }
 .ap-lobby :focus-visible { outline: 2px solid var(--lobby-accent); outline-offset: 3px; }
 .ap-lobby [role="status"] { color: #9a2943; }
@@ -66,7 +66,7 @@
   padding: 16px;
   border: 1px solid var(--lobby-line);
   border-radius: 12px;
-  background: #faf9ff;
+  background: var(--page-bg);
   overflow-wrap: anywhere;
 }
 

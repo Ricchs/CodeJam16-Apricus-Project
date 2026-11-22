@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { createLobby, getInterests, getJoinedLobbies, getLobbies, joinLobby } from "./lobbyApi.js";
 import "./lobby.css";
 
-export default function LobbyPage() {
+export default function LobbyPage({ onLobbyAdded }) {
   const [lobbies, setLobbies] = useState([]);
   const [interests, setInterests] = useState([]);
   const [search, setSearch] = useState("");
@@ -74,7 +74,10 @@ export default function LobbyPage() {
         title, location, capacity, interest_id: interestId,
         starts_at: start.toISOString(), ends_at: end.toISOString(),
       });
-      if (saved?.id) setLobbies((rows) => [...rows.filter(({ id }) => id !== saved.id), saved]);
+      if (saved?.id) {
+        setLobbies((rows) => [...rows.filter(({ id }) => id !== saved.id), saved]);
+        onLobbyAdded?.(saved);
+      }
       form.reset();
       setSearch("");
       setFilter("");
@@ -93,6 +96,8 @@ export default function LobbyPage() {
     setJoinError(null);
     try {
       await joinLobby(id);
+      const joined = lobbies.find((lobby) => lobby.id === id);
+      if (joined) onLobbyAdded?.(joined);
       setJoinedIds((current) => [...new Set([...current, id])]);
       setJoinNotice({ id, message: "Added to your calendar." });
     } catch (error) {
